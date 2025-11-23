@@ -1,4 +1,3 @@
-# main.py
 import os
 import time
 import sqlite3
@@ -8,30 +7,32 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 
 # Optional: Gemini
 try:
     import google.generativeai as genai
+    GENAI_AVAILABLE = True
 except Exception:
     genai = None
+    GENAI_AVAILABLE = False
 
 # ---------------------------
-# Load env
+# Configuration & Secrets
 # ---------------------------
-load_dotenv()
-GOOGLE_API_KEY = st.secrets("GOOGLE_API_KEY", "")
-APP_PASSWORD = os.getenv("APP_PASSWORD", "password123")  # default if not set
+# Use streamlit secrets properly
+GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY", "")
+APP_PASSWORD = st.secrets.get("APP_PASSWORD", "password123")
 
 # Configure Gemini if available
-if genai and GOOGLE_API_KEY:
+if GENAI_AVAILABLE and GOOGLE_API_KEY:
     try:
         genai.configure(api_key=GOOGLE_API_KEY)
-    except Exception:
-        pass
+    except Exception as e:
+        st.sidebar.warning(f"Gemini configuration failed: {e}")
 
 def pick_gemini_model():
-    if not genai:
+    """Select the best available Gemini model"""
+    if not GENAI_AVAILABLE or not GOOGLE_API_KEY:
         return None
     try:
         models = genai.list_models()
@@ -39,8 +40,7 @@ def pick_gemini_model():
             name = getattr(m, "name", "")
             supported = getattr(m, "supported_generation_methods", []) or []
             if "gemini-1.5" in name and "generateContent" in supported:
-                return name
-        # fallback:
+                return name.replace("models/", "")
         return "gemini-1.5-flash"
     except Exception:
         return "gemini-1.5-flash"
@@ -52,7 +52,9 @@ MODEL_NAME = pick_gemini_model()
 # ---------------------------
 DB_PATH = "portfolio.db"
 
+@st.cache_resource
 def init_db():
+    """Initialize database connection"""
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
@@ -70,17 +72,20 @@ def init_db():
 conn = init_db()
 
 def add_position_db(ticker, qty, avg_price):
+    """Add a position to the portfolio"""
     c = conn.cursor()
     c.execute("INSERT INTO portfolio (ticker, qty, avg_price) VALUES (?, ?, ?)",
               (ticker.upper(), float(qty), float(avg_price)))
     conn.commit()
 
 def remove_position_db(row_id):
+    """Remove a position from the portfolio"""
     c = conn.cursor()
     c.execute("DELETE FROM portfolio WHERE id = ?", (row_id,))
     conn.commit()
 
 def list_positions_db():
+    """List all portfolio positions"""
     c = conn.cursor()
     c.execute("SELECT id, ticker, qty, avg_price, added_at FROM portfolio ORDER BY added_at DESC")
     rows = c.fetchall()
@@ -88,27 +93,51 @@ def list_positions_db():
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
 
 # ---------------------------
-# Helpers: indicators, signals, Gemini wrapper
+# Helper Functions
 # ---------------------------
+@st.cache_data(ttl=60)
+def get_current_price(ticker):
+    """Fetch current price for a ticker"""
+    try:
+        t = yf.Ticker(ticker)
+        data = t.history(period="1d")
+        if data is not None and not data.empty:
+            return float(data["Close"].iloc[-1])
+        return None
+    except Exception as e:
+        st.error(f"Error fetching price for {ticker}: {e}")
+        return None
+
 def compute_indicators(df):
+    """Compute technical indicators"""
     df = df.copy()
     if "Close" not in df.columns or df.empty:
         return df
+    
+    # EMA
     df["EMA20"] = df["Close"].ewm(span=20, adjust=False).mean()
     df["EMA50"] = df["Close"].ewm(span=50, adjust=False).mean()
+    
+    # RSI
     delta = df["Close"].diff()
     gain = delta.clip(lower=0).rolling(14).mean()
     loss = -delta.clip(upper=0).rolling(14).mean()
     rs = gain / loss
     df["RSI"] = 100 - (100 / (1 + rs))
+    
+    # MACD
     exp1 = df["Close"].ewm(span=12, adjust=False).mean()
     exp2 = df["Close"].ewm(span=26, adjust=False).mean()
     df["MACD"] = exp1 - exp2
     df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
+    
     return df
 
 def generate_signal(df):
+    """Generate trading signal based on EMA crossover"""
     try:
+        if len(df) < 2:
+            return "N/A"
         if df["EMA20"].iloc[-1] > df["EMA50"].iloc[-1]:
             return "BUY"
         elif df["EMA20"].iloc[-1] < df["EMA50"].iloc[-1]:
@@ -119,245 +148,822 @@ def generate_signal(df):
         return "N/A"
 
 def ask_gemini(prompt):
-    if not genai or not GOOGLE_API_KEY:
-        return "Gemini not configured. Add GOOGLE_API_KEY to .env to enable AI features."
+    """Query Gemini API"""
+    if not GENAI_AVAILABLE:
+        return "⚠️ Gemini AI is not available. Install google-generativeai package."
+    if not GOOGLE_API_KEY:
+        return "⚠️ Gemini not configured. Add GOOGLE_API_KEY to Streamlit secrets to enable AI features."
     try:
         model = genai.GenerativeModel(MODEL_NAME)
         resp = model.generate_content(prompt)
         return getattr(resp, "text", str(resp))
     except Exception as e:
-        return f"[Gemini error] {e}"
+        return f"❌ Gemini error: {e}"
 
 # ---------------------------
-# UI & Auth
+# Page Configuration
 # ---------------------------
-st.set_page_config(page_title="Gemini Investment Terminal", layout="wide", page_icon="📊")
-st.title("Gemini Investment Terminal — Captain Suhas")
+st.set_page_config(
+    page_title="Gemini Investment Terminal",
+    layout="wide",
+    page_icon="📊",
+    initial_sidebar_state="expanded"
+)
 
-# Simple password auth
+# Custom CSS
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1f77b4;
+    }
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 10px 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------
+# Authentication
+# ---------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    pw = st.text_input("Enter app password", type="password")
-    if st.button("Login"):
-        if pw == APP_PASSWORD:
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("Incorrect password.")
+    st.title("🔐 Gemini Investment Terminal")
+    st.markdown("### Welcome, Captain Suhas")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        pw = st.text_input("Enter app password", type="password", key="login_password")
+        if st.button("🚀 Login", use_container_width=True):
+            if pw == APP_PASSWORD:
+                st.session_state.authenticated = True
+                st.success("✅ Login successful!")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("❌ Incorrect password. Please try again.")
     st.stop()
 
-# After login: navigation
-pages = ["Home", "Real-Time", "Stock Analyzer", "Crypto", "Portfolio", "News & Sentiment", "Predictions", "Settings"]
-page = st.sidebar.selectbox("Navigate", pages)
+# ---------------------------
+# Main Application
+# ---------------------------
+st.markdown('<p class="main-header">📊 Gemini Investment Terminal</p>', unsafe_allow_html=True)
+st.markdown("**Captain Suhas Dashboard**")
 
-# Optional local logo path (your uploaded file). If you don't want it, ignore.
-LOGO_PATH = "/mnt/data/ee3e67f9-a255-4b1b-af18-56f1a632a319.png"  # provided file path from uploads
-
-# show small header info
-st.sidebar.markdown("**Controls**")
-refresh_auto = st.sidebar.slider("Auto-refresh interval (sec) — 0 = off", 0, 60, 15)
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"Gemini model: `{MODEL_NAME}`")
-st.sidebar.markdown("API key configured." if GOOGLE_API_KEY else "No Gemini API key found.")
-
-# ---------- HOME ----------
-if page == "Home":
-    st.header("Welcome, Captain Suhas")
-    st.write("Use the sidebar to navigate. App stores your portfolio in a local SQLite DB (`portfolio.db`).")
-    st.info("Tip: Indian tickers use `.NS` suffix (e.g., TCS.NS, INFY.NS). Crypto: BTC-USD, ETH-USD.")
-
-# ---------- REAL-TIME ----------
-elif page == "Real-Time":
-    st.header("Real-Time Multi-Ticker Tracker")
-    tickers_raw = st.text_input("Tickers (comma-separated)", "AAPL")
-    refresh_now = st.button("Refresh now")
-    tickers = [t.strip().upper() for t in tickers_raw.split(",") if t.strip()]
-
-    if tickers and (refresh_now or (refresh_auto > 0 and (time.time() - st.session_state.get("last_refresh", 0) > refresh_auto))):
-        st.session_state.last_refresh = time.time()
-        failed = []
-        for t in tickers:
-            st.markdown(f"### {t}")
-            try:
-                intraday = yf.Ticker(t).history(period="1d", interval="1m")
-                if intraday is None or intraday.empty:
-                    st.warning(f"No intraday data for {t}. Try a single ticker or use correct market suffix (e.g., INFY.NS).")
-                    failed.append(t)
-                    continue
-                latest = intraday["Close"].iloc[-1]
-                st.metric(f"{t} Live Price", f"${latest:.2f}")
-                # indicators & EMA overlay
-                intraday["EMA20"] = intraday["Close"].ewm(span=20).mean()
-                fig = go.Figure()
-                fig.add_trace(go.Candlestick(x=intraday.index, open=intraday["Open"], high=intraday["High"],
-                                             low=intraday["Low"], close=intraday["Close"], name="Candle"))
-                fig.add_trace(go.Scatter(x=intraday.index, y=intraday["EMA20"], mode="lines", name="EMA20"))
-                fig.update_layout(template="plotly_dark", height=420)
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error fetching {t}: {e}")
-                failed.append(t)
-        if failed:
-            st.error("Failed: " + ", ".join(failed))
-
-# ---------- STOCK ANALYZER ----------
-elif page == "Stock Analyzer":
-    st.header("Stock Analyzer: historical & AI")
-    ticker = st.text_input("Ticker (single)", "AAPL").upper()
-    period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=0)
-    interval = st.selectbox("Interval", ["1d", "1wk"], index=0)
-    if st.button("Analyze"):
-        t = yf.Ticker(ticker)
-        hist = t.history(period=period, interval=interval)
-        if hist is None or hist.empty:
-            st.error("No data.")
-        else:
-            st.subheader("Price Chart")
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=hist.index, y=hist["Close"], mode="lines+markers", name="Close"))
-            fig.update_layout(template="plotly_dark", height=420)
-            st.plotly_chart(fig, use_container_width=True)
-            st.subheader("Fundamentals")
-            info = getattr(t, "info", {}) or {}
-            cols = st.columns(4)
-            cols[0].metric("Market Cap", info.get("marketCap", "N/A"))
-            cols[1].metric("PE Ratio", info.get("trailingPE", "N/A"))
-            cols[2].metric("52w High", info.get("fiftyTwoWeekHigh", "N/A"))
-            cols[3].metric("52w Low", info.get("fiftyTwoWeekLow", "N/A"))
-            st.subheader("Technicals & AI Analysis")
-            df = compute_indicators(hist)
-            st.write("Latest Close:", df["Close"].iloc[-1])
-            st.write("SMA/EMA snapshot:")
-            st.dataframe(df.tail(3)[["EMA20", "EMA50", "RSI", "MACD"]].round(4))
-            signal = generate_signal(df)
-            st.info(f"Signal based on EMA20/50: **{signal}**")
-            # AI summary
-            prompt = (f"You are a senior market analyst. Summarize {ticker} with last {period} of closes. "
-                      "Give sentiment (Bullish/Neutral/Bearish), risk score 0-100, short action (Buy/Hold/Sell), and reason.")
-            with st.spinner("Asking Gemini..."):
-                ai = ask_gemini(prompt)
-            st.subheader("Gemini Analysis")
-            st.write(ai)
-
-# ---------- CRYPTO ----------
-elif page == "Crypto":
-    st.header("Crypto Analyzer")
-    crypto = st.text_input("Crypto ticker (Yahoo format)", "BTC-USD")
-    c_period = st.selectbox("Period", ["1d", "5d", "1mo", "3mo"], index=0)
-    if st.button("Analyze Crypto"):
-        ch = yf.Ticker(crypto).history(period=c_period, interval="1m" if c_period=="1d" else "1h")
-        if ch is None or ch.empty:
-            st.error("No data for this crypto.")
-        else:
-            fig = go.Figure()
-            fig.add_trace(go.Candlestick(x=ch.index, open=ch["Open"], high=ch["High"], low=ch["Low"], close=ch["Close"]))
-            fig.update_layout(template="plotly_dark", height=450)
-            st.plotly_chart(fig, use_container_width=True)
-            st.subheader("AI Crypto Sentiment")
-            prompt = f"Analyze {crypto} for the last {c_period}: sentiment, short-term outlook, and risk."
-            st.write(ask_gemini(prompt))
-
-# ---------- PORTFOLIO ----------
-elif page == "Portfolio":
-    st.header("Portfolio (persistent)")
-    with st.form("add_pos", clear_on_submit=True):
-        pt, pq, pp = st.columns(3)
-        with pt: ticker = st.text_input("Ticker", "AAPL")
-        with pq: qty = st.number_input("Quantity", min_value=0.0, value=1.0, step=1.0)
-        with pp: avg = st.number_input("Avg Price (0 -> fetch current)", min_value=0.0, value=0.0, step=0.01)
-        submitted = st.form_submit_button("Add")
-        if submitted:
-            if avg == 0.0:
-                cur = get_current_price(ticker)
-                if cur is None:
-                    st.error("Could not fetch current price; enter avg.")
-                else:
-                    add_position_db(ticker, qty, cur)
-                    st.success(f"Added {qty} x {ticker} @ {cur:.2f}")
-            else:
-                add_position_db(ticker, qty, avg)
-                st.success(f"Added {qty} x {ticker} @ {avg:.2f}")
-
-    df = list_positions_db()
-    if df.empty:
-        st.info("No positions yet.")
+# Sidebar Navigation
+with st.sidebar:
+    st.image("https://img.icons8.com/fluency/96/000000/rocket.png", width=80)
+    st.markdown("### 🧭 Navigation")
+    pages = ["🏠 Home", "⚡ Real-Time", "📈 Stock Analyzer", "₿ Crypto", 
+             "💼 Portfolio", "📰 News & Sentiment", "🔮 Predictions", "⚙️ Settings"]
+    page = st.selectbox("Select Page", pages, label_visibility="collapsed")
+    
+    st.markdown("---")
+    st.markdown("### ⚡ Controls")
+    refresh_auto = st.slider("Auto-refresh (sec)", 0, 60, 0, help="0 = disabled")
+    
+    st.markdown("---")
+    st.markdown("### 🤖 AI Status")
+    if GENAI_AVAILABLE and GOOGLE_API_KEY:
+        st.success(f"✅ Model: `{MODEL_NAME}`")
+    elif GENAI_AVAILABLE:
+        st.warning("⚠️ API key missing")
     else:
-        # compute live values
-        rows=[]
-        for idx, r in df.iterrows():
-            cur = get_current_price(r['ticker']) or 0.0
-            val = cur * r['qty']
-            pl = (cur - r['avg_price']) * r['qty']
-            rows.append({"id": r['id'], "ticker": r['ticker'], "qty": r['qty'], "avg": r['avg_price'], "current": round(cur,2), "value": round(val,2), "pl": round(pl,2)})
+        st.error("❌ Gemini unavailable")
+    
+    st.markdown("---")
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
+
+# Initialize last refresh time
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = 0
+
+# ---------------------------
+# Page: Home
+# ---------------------------
+if page == "🏠 Home":
+    st.header("🏠 Welcome, Captain Suhas")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        ### 🎯 Quick Start Guide
+        
+        **Navigation:**
+        - **⚡ Real-Time**: Live multi-ticker tracking with 1-minute charts
+        - **📈 Stock Analyzer**: Deep dive into stocks with AI analysis
+        - **₿ Crypto**: Cryptocurrency analysis and sentiment
+        - **💼 Portfolio**: Manage your positions (persistent storage)
+        - **📰 News & Sentiment**: Latest headlines with AI insights
+        - **🔮 Predictions**: AI-powered price forecasts
+        - **⚙️ Settings**: Diagnostics and configuration
+        """)
+    
+    with col2:
+        st.markdown("""
+        ### 💡 Pro Tips
+        
+        - **Indian Stocks**: Use `.NS` suffix (e.g., `TCS.NS`, `INFY.NS`)
+        - **US Stocks**: Direct ticker (e.g., `AAPL`, `MSFT`)
+        - **Crypto**: Use format `BTC-USD`, `ETH-USD`
+        - **Portfolio**: Data persists in SQLite database
+        - **AI Features**: Requires Gemini API key in secrets
+        """)
+    
+    st.info("📌 **Note**: Your portfolio is stored locally in `portfolio.db` and persists between sessions.")
+
+# ---------------------------
+# Page: Real-Time
+# ---------------------------
+elif page == "⚡ Real-Time":
+    st.header("⚡ Real-Time Multi-Ticker Tracker")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        tickers_raw = st.text_input("Enter tickers (comma-separated)", "AAPL,MSFT,GOOGL", 
+                                    help="Examples: AAPL,MSFT or TCS.NS,INFY.NS")
+    with col2:
+        st.write("")
+        st.write("")
+        refresh_now = st.button("🔄 Refresh Now", use_container_width=True)
+    
+    tickers = [t.strip().upper() for t in tickers_raw.split(",") if t.strip()]
+    
+    # Auto-refresh logic
+    should_refresh = refresh_now or (refresh_auto > 0 and (time.time() - st.session_state.last_refresh > refresh_auto))
+    
+    if tickers and should_refresh:
+        st.session_state.last_refresh = time.time()
+        
+        for t in tickers:
+            with st.expander(f"📊 {t}", expanded=True):
+                try:
+                    ticker_obj = yf.Ticker(t)
+                    intraday = ticker_obj.history(period="1d", interval="1m")
+                    
+                    if intraday is None or intraday.empty:
+                        st.warning(f"⚠️ No intraday data for {t}. Check ticker format.")
+                        continue
+                    
+                    # Current price
+                    latest = intraday["Close"].iloc[-1]
+                    prev_close = intraday["Close"].iloc[0]
+                    change = latest - prev_close
+                    change_pct = (change / prev_close) * 100
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Current Price", f"${latest:.2f}", f"{change:+.2f} ({change_pct:+.2f}%)")
+                    col2.metric("High", f"${intraday['High'].max():.2f}")
+                    col3.metric("Low", f"${intraday['Low'].min():.2f}")
+                    
+                    # Chart with EMA
+                    intraday["EMA20"] = intraday["Close"].ewm(span=20, adjust=False).mean()
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Candlestick(
+                        x=intraday.index,
+                        open=intraday["Open"],
+                        high=intraday["High"],
+                        low=intraday["Low"],
+                        close=intraday["Close"],
+                        name="Price"
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=intraday.index,
+                        y=intraday["EMA20"],
+                        mode="lines",
+                        name="EMA20",
+                        line=dict(color="orange", width=2)
+                    ))
+                    fig.update_layout(
+                        template="plotly_dark",
+                        height=400,
+                        xaxis_title="Time",
+                        yaxis_title="Price",
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error fetching {t}: {e}")
+
+# ---------------------------
+# Page: Stock Analyzer
+# ---------------------------
+elif page == "📈 Stock Analyzer":
+    st.header("📈 Stock Analyzer")
+    
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        ticker = st.text_input("Ticker Symbol", "AAPL", help="Enter stock ticker").upper()
+    with col2:
+        period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y", "2y"], index=2)
+    with col3:
+        interval = st.selectbox("Interval", ["1d", "1wk"], index=0)
+    
+    if st.button("🔍 Analyze Stock", use_container_width=True):
+        with st.spinner(f"Analyzing {ticker}..."):
+            try:
+                t = yf.Ticker(ticker)
+                hist = t.history(period=period, interval=interval)
+                
+                if hist is None or hist.empty:
+                    st.error("❌ No data available for this ticker.")
+                else:
+                    # Price Chart
+                    st.subheader("📊 Price Chart")
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=hist.index,
+                        y=hist["Close"],
+                        mode="lines",
+                        name="Close Price",
+                        line=dict(color="#1f77b4", width=2)
+                    ))
+                    fig.update_layout(
+                        template="plotly_dark",
+                        height=450,
+                        xaxis_title="Date",
+                        yaxis_title="Price ($)",
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Fundamentals
+                    st.subheader("📋 Fundamentals")
+                    info = getattr(t, "info", {}) or {}
+                    
+                    cols = st.columns(4)
+                    metrics = [
+                        ("Market Cap", info.get("marketCap", "N/A")),
+                        ("PE Ratio", info.get("trailingPE", "N/A")),
+                        ("52W High", info.get("fiftyTwoWeekHigh", "N/A")),
+                        ("52W Low", info.get("fiftyTwoWeekLow", "N/A"))
+                    ]
+                    
+                    for col, (label, value) in zip(cols, metrics):
+                        if isinstance(value, (int, float)):
+                            col.metric(label, f"{value:,.2f}" if isinstance(value, float) else f"{value:,}")
+                        else:
+                            col.metric(label, value)
+                    
+                    # Technical Indicators
+                    st.subheader("📊 Technical Analysis")
+                    df = compute_indicators(hist)
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Latest Metrics:**")
+                        st.write(f"- Close: ${df['Close'].iloc[-1]:.2f}")
+                        st.write(f"- EMA20: ${df['EMA20'].iloc[-1]:.2f}")
+                        st.write(f"- EMA50: ${df['EMA50'].iloc[-1]:.2f}")
+                        st.write(f"- RSI: {df['RSI'].iloc[-1]:.2f}")
+                        st.write(f"- MACD: {df['MACD'].iloc[-1]:.4f}")
+                    
+                    with col2:
+                        signal = generate_signal(df)
+                        signal_color = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡", "N/A": "⚪"}
+                        st.markdown(f"### {signal_color.get(signal, '⚪')} Signal: **{signal}**")
+                        st.write("Based on EMA20/EMA50 crossover")
+                        
+                        # RSI interpretation
+                        rsi_val = df['RSI'].iloc[-1]
+                        if rsi_val > 70:
+                            st.warning("⚠️ Overbought (RSI > 70)")
+                        elif rsi_val < 30:
+                            st.info("💡 Oversold (RSI < 30)")
+                    
+                    # Recent indicator data
+                    st.write("**Recent Technical Data:**")
+                    st.dataframe(
+                        df.tail(5)[["Close", "EMA20", "EMA50", "RSI", "MACD", "Signal"]].round(4),
+                        use_container_width=True
+                    )
+                    
+                    # AI Analysis
+                    st.subheader("🤖 AI Analysis")
+                    prompt = f"""You are a senior market analyst. Analyze {ticker} based on its recent {period} performance.
+                    
+Latest data:
+- Current Price: ${df['Close'].iloc[-1]:.2f}
+- EMA20: ${df['EMA20'].iloc[-1]:.2f}
+- EMA50: ${df['EMA50'].iloc[-1]:.2f}
+- RSI: {df['RSI'].iloc[-1]:.2f}
+- Technical Signal: {signal}
+
+Provide:
+1. Sentiment (Bullish/Neutral/Bearish)
+2. Risk Score (0-100)
+3. Recommendation (Buy/Hold/Sell)
+4. Key reasoning (2-3 points)
+5. Important considerations for investors
+
+Keep response concise and actionable."""
+                    
+                    with st.spinner("🤖 Consulting Gemini AI..."):
+                        ai_response = ask_gemini(prompt)
+                    
+                    st.markdown(ai_response)
+                    
+            except Exception as e:
+                st.error(f"❌ Error analyzing stock: {e}")
+
+# ---------------------------
+# Page: Crypto
+# ---------------------------
+elif page == "₿ Crypto":
+    st.header("₿ Cryptocurrency Analyzer")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        crypto = st.text_input("Crypto Ticker", "BTC-USD", 
+                               help="Format: BTC-USD, ETH-USD, etc.").upper()
+    with col2:
+        c_period = st.selectbox("Period", ["1d", "5d", "1mo", "3mo", "6mo"], index=2)
+    
+    if st.button("🔍 Analyze Crypto", use_container_width=True):
+        with st.spinner(f"Analyzing {crypto}..."):
+            try:
+                crypto_obj = yf.Ticker(crypto)
+                interval = "1m" if c_period == "1d" else ("15m" if c_period == "5d" else "1h")
+                ch = crypto_obj.history(period=c_period, interval=interval)
+                
+                if ch is None or ch.empty:
+                    st.error("❌ No data available for this crypto ticker.")
+                else:
+                    # Metrics
+                    latest = ch["Close"].iloc[-1]
+                    high = ch["High"].max()
+                    low = ch["Low"].min()
+                    vol = ch["Volume"].sum()
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Current Price", f"${latest:,.2f}")
+                    col2.metric(f"{c_period} High", f"${high:,.2f}")
+                    col3.metric(f"{c_period} Low", f"${low:,.2f}")
+                    col4.metric("Total Volume", f"{vol:,.0f}")
+                    
+                    # Candlestick Chart
+                    fig = go.Figure()
+                    fig.add_trace(go.Candlestick(
+                        x=ch.index,
+                        open=ch["Open"],
+                        high=ch["High"],
+                        low=ch["Low"],
+                        close=ch["Close"],
+                        name=crypto
+                    ))
+                    fig.update_layout(
+                        template="plotly_dark",
+                        height=500,
+                        xaxis_title="Time",
+                        yaxis_title="Price (USD)",
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Volume Chart
+                    fig_vol = go.Figure()
+                    fig_vol.add_trace(go.Bar(
+                        x=ch.index,
+                        y=ch["Volume"],
+                        name="Volume",
+                        marker_color="lightblue"
+                    ))
+                    fig_vol.update_layout(
+                        template="plotly_dark",
+                        height=250,
+                        xaxis_title="Time",
+                        yaxis_title="Volume",
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig_vol, use_container_width=True)
+                    
+                    # AI Sentiment
+                    st.subheader("🤖 AI Crypto Sentiment")
+                    prompt = f"""Analyze {crypto} cryptocurrency for the last {c_period}.
+
+Current data:
+- Price: ${latest:,.2f}
+- Period High: ${high:,.2f}
+- Period Low: ${low:,.2f}
+- Price range: {((high-low)/low*100):.2f}%
+
+Provide:
+1. Overall sentiment (Bullish/Bearish/Neutral)
+2. Short-term outlook (next 7 days)
+3. Key support and resistance levels
+4. Risk assessment
+5. Trading considerations
+
+Be concise and specific."""
+                    
+                    with st.spinner("🤖 Analyzing with Gemini..."):
+                        ai_response = ask_gemini(prompt)
+                    
+                    st.markdown(ai_response)
+                    
+            except Exception as e:
+                st.error(f"❌ Error analyzing crypto: {e}")
+
+# ---------------------------
+# Page: Portfolio
+# ---------------------------
+elif page == "💼 Portfolio":
+    st.header("💼 Portfolio Management")
+    
+    st.markdown("### ➕ Add New Position")
+    
+    with st.form("add_position", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            ticker = st.text_input("Ticker", "AAPL", help="Stock ticker symbol")
+        with col2:
+            qty = st.number_input("Quantity", min_value=0.01, value=1.0, step=1.0)
+        with col3:
+            avg = st.number_input("Avg Price", min_value=0.0, value=0.0, step=0.01,
+                                 help="0 = fetch current price")
+        
+        submitted = st.form_submit_button("➕ Add Position", use_container_width=True)
+        
+        if submitted:
+            ticker = ticker.upper().strip()
+            if not ticker:
+                st.error("❌ Please enter a ticker symbol.")
+            else:
+                if avg == 0.0:
+                    with st.spinner(f"Fetching current price for {ticker}..."):
+                        cur = get_current_price(ticker)
+                    if cur is None:
+                        st.error("❌ Could not fetch current price. Please enter average price manually.")
+                    else:
+                        add_position_db(ticker, qty, cur)
+                        st.success(f"✅ Added {qty} x {ticker} @ ${cur:.2f}")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    add_position_db(ticker, qty, avg)
+                    st.success(f"✅ Added {qty} x {ticker} @ ${avg:.2f}")
+                    time.sleep(0.5)
+                    st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### 📊 Current Holdings")
+    
+    df = list_positions_db()
+    
+    if df.empty:
+        st.info("📭 No positions yet. Add your first position above!")
+    else:
+        # Compute live values
+        rows = []
+        total_value = 0
+        total_pl = 0
+        
+        with st.spinner("Fetching live prices..."):
+            for idx, r in df.iterrows():
+                cur = get_current_price(r['ticker'])
+                if cur is None:
+                    cur = r['avg_price']  # Fallback to avg price
+                
+                val = cur * r['qty']
+                pl = (cur - r['avg_price']) * r['qty']
+                pl_pct = ((cur - r['avg_price']) / r['avg_price'] * 100) if r['avg_price'] > 0 else 0
+                
+                total_value += val
+                total_pl += pl
+                
+                rows.append({
+                    "ID": r['id'],
+                    "Ticker": r['ticker'],
+                    "Qty": r['qty'],
+                    "Avg Price": f"${r['avg_price']:.2f}",
+                    "Current": f"${cur:.2f}",
+                    "Value": f"${val:.2f}",
+                    "P&L": f"${pl:.2f}",
+                    "P&L %": f"{pl_pct:.2f}%"
+                })
+        
+        # Summary metrics
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Value", f"${total_value:,.2f}")
+        col2.metric("Total P&L", f"${total_pl:,.2f}", 
+                   delta=f"{(total_pl/total_value*100):.2f}%" if total_value > 0 else "0%")
+        col3.metric("Positions", len(df))
+        
+        st.markdown("---")
+        
+        # Display portfolio
         pdf = pd.DataFrame(rows)
-        st.dataframe(pdf)
-        rem = st.number_input("Enter ID to remove", min_value=0, value=0, step=1)
-        if st.button("Remove position"):
-            remove_position_db(rem)
-            st.success("Removed.")
+        st.dataframe(pdf, use_container_width=True, hide_index=True)
+        
+        # Remove position
+        st.markdown("### 🗑️ Remove Position")
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            rem_id = st.number_input("Enter Position ID", min_value=1, value=1, step=1)
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("🗑️ Remove", use_container_width=True):
+                remove_position_db(rem_id)
+                st.success(f"✅ Position {rem_id} removed.")
+                time.sleep(0.5)
+                st.rerun()
 
-# ---------- NEWS & SENTIMENT ----------
-elif page == "News & Sentiment":
-    st.header("News & Sentiment")
-    nt = st.text_input("Ticker for headlines", "AAPL")
-    ncount = st.slider("How many headlines", 1, 10, 5)
-    if st.button("Fetch Headlines"):
-        t = yf.Ticker(nt)
-        raw = getattr(t, "news", []) or []
-        headlines = [i.get("title") or i.get("link") or str(i) for i in raw][:ncount]
-        if not headlines:
-            st.warning("No headlines from yfinance; coverage varies.")
+# ---------------------------
+# Page: News & Sentiment
+# ---------------------------
+elif page == "📰 News & Sentiment":
+    st.header("📰 News & Sentiment Analysis")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        nt = st.text_input("Ticker for News", "AAPL", help="Enter stock ticker").upper()
+    with col2:
+        ncount = st.slider("Headlines", 1, 10, 5)
+    
+    if st.button("📰 Fetch News", use_container_width=True):
+        with st.spinner(f"Fetching news for {nt}..."):
+            try:
+                t = yf.Ticker(nt)
+                raw_news = getattr(t, "news", []) or []
+                
+                if not raw_news:
+                    st.warning("⚠️ No news available from yfinance. Coverage may vary by ticker.")
+                else:
+                    headlines = []
+                    for item in raw_news[:ncount]:
+                        title = item.get("title", "")
+                        link = item.get("link", "")
+                        publisher = item.get("publisher", "Unknown")
+                        
+                        if title:
+                            headlines.append({"title": title, "link": link, "publisher": publisher})
+                    
+                    if headlines:
+                        st.subheader(f"📰 Latest Headlines for {nt}")
+                        
+                        for i, h in enumerate(headlines, 1):
+                            with st.expander(f"{i}. {h['title']}", expanded=(i <= 3)):
+                                st.write(f"**Publisher:** {h['publisher']}")
+                                if h['link']:
+                                    st.markdown(f"[Read full article]({h['link']})")
+                        
+                        # AI Sentiment Analysis
+                        st.markdown("---")
+                        st.subheader("🤖 AI Sentiment Analysis")
+                        
+                        headline_text = "\n".join([f"{i+1}. {h['title']}" for i, h in enumerate(headlines)])
+                        
+                        prompt = f"""Analyze the sentiment and potential market impact of these recent headlines for {nt}:
+
+{headline_text}
+
+Provide:
+1. Overall sentiment (Positive/Negative/Mixed/Neutral)
+2. Key themes from the news
+3. Potential impact on stock price (Short-term and Medium-term)
+4. Investor considerations
+5. Risk factors mentioned
+
+Be specific and actionable."""
+                        
+                        with st.spinner("🤖 Analyzing sentiment with Gemini..."):
+                            ai_response = ask_gemini(prompt)
+                        
+                        st.markdown(ai_response)
+                    else:
+                        st.warning("⚠️ Could not extract headlines from news data.")
+                        
+            except Exception as e:
+                st.error(f"❌ Error fetching news: {e}")
+
+# ---------------------------
+# Page: Predictions
+# ---------------------------
+elif page == "🔮 Predictions":
+    st.header("🔮 AI Price Predictions")
+    
+    st.info("⚠️ **Disclaimer**: These are AI-generated predictions based on historical data and should NOT be used as financial advice. Always do your own research.")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        pt = st.text_input("Ticker", "AAPL", help="Enter stock ticker").upper()
+    with col2:
+        days = st.slider("Days Ahead", 1, 30, 7)
+    
+    if st.button("🔮 Generate Prediction", use_container_width=True):
+        with st.spinner(f"Generating prediction for {pt}..."):
+            try:
+                ticker_obj = yf.Ticker(pt)
+                hist = ticker_obj.history(period="6mo")
+                
+                if hist is None or hist.empty:
+                    st.error("❌ Not enough historical data for prediction.")
+                else:
+                    # Display recent price action
+                    st.subheader("📊 Recent Price History")
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=hist.index,
+                        y=hist["Close"],
+                        mode="lines",
+                        name="Close Price",
+                        line=dict(color="#1f77b4", width=2)
+                    ))
+                    fig.update_layout(
+                        template="plotly_dark",
+                        height=350,
+                        xaxis_title="Date",
+                        yaxis_title="Price ($)"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Get recent data for AI
+                    recent_closes = hist["Close"].tail(30).tolist()
+                    current_price = recent_closes[-1]
+                    avg_30d = np.mean(recent_closes)
+                    volatility = np.std(recent_closes)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Current Price", f"${current_price:.2f}")
+                    col2.metric("30-Day Avg", f"${avg_30d:.2f}")
+                    col3.metric("Volatility", f"${volatility:.2f}")
+                    
+                    # AI Prediction
+                    st.markdown("---")
+                    st.subheader("🤖 AI-Generated Forecast")
+                    
+                    prompt = f"""You are a quantitative analyst. Based on the recent 30-day closing prices for {pt}, provide a probabilistic forecast.
+
+Recent closing prices (last 30 days): {recent_closes}
+
+Current statistics:
+- Current Price: ${current_price:.2f}
+- 30-Day Average: ${avg_30d:.2f}
+- Volatility (Std Dev): ${volatility:.2f}
+
+Forecast for the next {days} days:
+
+Provide:
+1. Expected price range (Low-High)
+2. Most likely price target
+3. Probability of price increase vs. decrease
+4. Confidence level (0-100)
+5. Key factors that could affect the prediction
+6. Risk considerations
+7. Technical support/resistance levels
+
+Be realistic and acknowledge uncertainty. Frame this as a probabilistic analysis, not a guarantee."""
+                    
+                    with st.spinner("🤖 Generating forecast with Gemini..."):
+                        ai_response = ask_gemini(prompt)
+                    
+                    st.markdown(ai_response)
+                    
+                    st.warning("⚠️ **Important**: This prediction is based on historical patterns and AI analysis. Markets are unpredictable and many factors can affect prices. Never invest based solely on predictions.")
+                    
+            except Exception as e:
+                st.error(f"❌ Error generating prediction: {e}")
+
+# ---------------------------
+# Page: Settings
+# ---------------------------
+elif page == "⚙️ Settings":
+    st.header("⚙️ Settings & Diagnostics")
+    
+    # Gemini Configuration
+    st.subheader("🤖 Gemini AI Configuration")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**Status:**")
+        if GENAI_AVAILABLE:
+            st.success("✅ google-generativeai installed")
         else:
-            st.subheader("Headlines")
-            for h in headlines:
-                st.write("- " + h)
-            prompt = "Analyze sentiment and investor impact for these headlines:\n\n" + "\n".join(headlines)
-            with st.spinner("Asking Gemini"):
-                ai = ask_gemini(prompt)
-            st.markdown("### Gemini News Sentiment")
-            st.write(ai)
-
-# ---------- PREDICTIONS ----------
-elif page == "Predictions":
-    st.header("AI Prediction (textual)")
-    pt = st.text_input("Ticker", "AAPL").upper()
-    days = st.slider("Days ahead", 1, 14, 7)
-    if st.button("Predict"):
-        hist = yf.Ticker(pt).history(period="3mo")
-        if hist is None or hist.empty:
-            st.error("Not enough history.")
+            st.error("❌ google-generativeai not installed")
+            st.code("pip install google-generativeai")
+        
+        if GOOGLE_API_KEY:
+            st.success(f"✅ API Key configured (length: {len(GOOGLE_API_KEY)})")
         else:
-            snippet = hist["Close"].tail(30).tolist()
-            prompt = f"Given recent closes {snippet} for {pt}, provide a probabilistic outlook for next {days} days: expected low/high, probability of increase, confidence 0-100, and rationale."
-            with st.spinner("Asking Gemini"):
-                out = ask_gemini(prompt)
-            st.markdown("### Prediction")
-            st.write(out)
-
-# ---------- SETTINGS ----------
-elif page == "Settings":
-    st.header("Settings & Diagnostics")
-    st.write("Gemini model detected:")
-    st.code(MODEL_NAME if MODEL_NAME else "None")
-    if st.button("List available models"):
-        if not genai:
-            st.error("google-generativeai not installed.")
+            st.warning("⚠️ No API key found in secrets")
+    
+    with col2:
+        st.write("**Current Model:**")
+        if MODEL_NAME:
+            st.code(MODEL_NAME)
+        else:
+            st.error("No model detected")
+    
+    if st.button("🔍 List Available Models"):
+        if not GENAI_AVAILABLE:
+            st.error("❌ google-generativeai not installed")
+        elif not GOOGLE_API_KEY:
+            st.error("❌ API key not configured")
         else:
             try:
-                models = genai.list_models()
-                st.write([m.name for m in models])
+                with st.spinner("Fetching models..."):
+                    models = genai.list_models()
+                    model_list = [m.name for m in models]
+                    st.write(f"Found {len(model_list)} models:")
+                    st.json(model_list)
             except Exception as e:
-                st.error(f"Error listing models: {e}")
-    if st.button("Clear database (remove all positions)"):
-        c = conn.cursor()
-        c.execute("DELETE FROM portfolio")
-        conn.commit()
-        st.success("Portfolio cleared.")
+                st.error(f"❌ Error listing models: {e}")
+    
+    st.markdown("---")
+    
+    # Database Management
+    st.subheader("💾 Database Management")
+    
+    df = list_positions_db()
+    st.write(f"**Current Positions:** {len(df)}")
+    st.write(f"**Database Path:** `{DB_PATH}`")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🗑️ Clear All Positions", type="primary"):
+            c = conn.cursor()
+            c.execute("DELETE FROM portfolio")
+            conn.commit()
+            st.success("✅ Portfolio cleared successfully!")
+            time.sleep(1)
+            st.rerun()
+    
+    with col2:
+        if st.button("📊 Show Database Stats"):
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) as count, SUM(qty) as total_qty FROM portfolio")
+            stats = c.fetchone()
+            st.write(f"- Total Positions: {stats[0]}")
+            st.write(f"- Total Shares: {stats[1]}")
+    
+    st.markdown("---")
+    
+    # System Information
+    st.subheader("ℹ️ System Information")
+    
+    info_data = {
+        "Python Packages": ["streamlit", "yfinance", "pandas", "numpy", "plotly"],
+        "Database": DB_PATH,
+        "Authenticated": st.session_state.authenticated,
+        "Auto-refresh": f"{refresh_auto}s" if refresh_auto > 0 else "Disabled"
+    }
+    
+    for key, value in info_data.items():
+        st.write(f"**{key}:** {value}")
+    
+    st.markdown("---")
+    
+    # API Testing
+    st.subheader("🧪 API Testing")
+    
+    test_ticker = st.text_input("Test Ticker", "AAPL")
+    
+    if st.button("🧪 Test Yahoo Finance API"):
+        with st.spinner(f"Testing {test_ticker}..."):
+            try:
+                t = yf.Ticker(test_ticker)
+                data = t.history(period="1d")
+                if data is not None and not data.empty:
+                    st.success("✅ Yahoo Finance API working")
+                    st.write("Latest data:")
+                    st.dataframe(data.tail(1))
+                else:
+                    st.error("❌ No data returned")
+            except Exception as e:
+                st.error(f"❌ API Error: {e}")
+    
+    if st.button("🧪 Test Gemini API"):
+        with st.spinner("Testing Gemini..."):
+            response = ask_gemini("Respond with 'API working' if you receive this.")
+            st.write("**Response:**")
+            st.write(response)
 
 # ---------------------------
 # Footer
 # ---------------------------
 st.markdown("---")
-st.caption("Gemini Investment Terminal — built for Captain Suhas. Local SQLite persistence enabled.")
+st.markdown("""
+<div style='text-align: center; color: #666; padding: 20px;'>
+    <p><strong>Gemini Investment Terminal</strong> — Built for Captain Suhas</p>
+    <p>🗄️ Local SQLite persistence enabled | 🤖 Powered by Gemini AI</p>
+    <p style='font-size: 0.8em;'>⚠️ For educational purposes only. Not financial advice.</p>
+</div>
+""", unsafe_allow_html=True)
