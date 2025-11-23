@@ -50,17 +50,36 @@ def pick_gemini_model():
         return None
     try:
         models = genai.list_models()
+        # Priority order of models to try
+        preferred_models = [
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+            "gemini-flash-latest",
+            "gemini-pro-latest"
+        ]
+        
+        available_models = []
         for m in models:
             name = getattr(m, "name", "")
             supported = getattr(m, "supported_generation_methods", []) or []
-            # Remove 'models/' prefix if present
-            clean_name = name.replace("models/", "")
-            if "gemini-1.5" in clean_name and "generateContent" in supported:
-                return clean_name
-        # Fallback to common model names
-        return "gemini-1.5-flash-latest"
+            if "generateContent" in supported:
+                # Remove 'models/' prefix
+                clean_name = name.replace("models/", "")
+                available_models.append(clean_name)
+        
+        # Try to find preferred model
+        for pref in preferred_models:
+            if pref in available_models:
+                return pref
+        
+        # Fallback: return first available model that supports generateContent
+        if available_models:
+            return available_models[0]
+        
+        return "gemini-2.5-flash"
     except Exception:
-        return "gemini-1.5-flash-latest"
+        return "gemini-2.5-flash"
 
 MODEL_NAME = pick_gemini_model()
 
@@ -174,10 +193,11 @@ def ask_gemini(prompt):
         # Try different model names if the current one fails
         model_names = [
             MODEL_NAME,
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro-latest",
-            "gemini-pro"
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+            "gemini-flash-latest",
+            "gemini-pro-latest"
         ]
         
         for model_name in model_names:
@@ -188,8 +208,10 @@ def ask_gemini(prompt):
                 resp = model.generate_content(prompt)
                 return getattr(resp, "text", str(resp))
             except Exception as e:
-                if "404" in str(e) and model_name != model_names[-1]:
-                    continue  # Try next model
+                error_str = str(e)
+                # If 404 or model not found, try next model
+                if ("404" in error_str or "not found" in error_str.lower()) and model_name != model_names[-1]:
+                    continue
                 else:
                     raise e
         
