@@ -397,7 +397,9 @@ with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/000000/rocket.png", width=80)
     st.markdown("### 🧭 Navigation")
     pages = ["🏠 Home", "⚡ Real-Time", "📈 Stock Analyzer", "₿ Crypto", 
-             "💼 Portfolio", "📰 News & Sentiment", "🔮 Predictions", "⚙️ Settings"]
+             "💼 Portfolio", "📰 News & Sentiment", "🔮 Predictions", 
+             "🤖 AI Research Assistant", "📊 Market Screener", 
+             "📚 Compare Stocks", "⚙️ Settings"]
     page = st.selectbox("Select Page", pages, label_visibility="collapsed")
     
     st.markdown("---")
@@ -457,9 +459,8 @@ if page == "🏠 Home":
         st.markdown("""
         ### 💡 Pro Tips
         
-        - **Indian Stocks**: Use `.NS` suffix (e.g., `TCS.NS`, `INFY.NS`)            
+        - **Indian Stocks**: Use `.NS` suffix (e.g., `TCS.NS`, `INFY.NS`)
         - **US Stocks**: Direct ticker (e.g., `AAPL`, `MSFT`)
-        - **Paris Stocks**: Use `.PA` suffix (e.g., `EL.PA`, `RMS.PA`)             
         - **Crypto**: Use format `BTC-USD`, `ETH-USD`
         - **Portfolio**: Data persists in SQLite database
         - **AI Features**: Requires Gemini API key in secrets
@@ -1068,6 +1069,470 @@ Be realistic and acknowledge uncertainty. Frame this as a probabilistic analysis
                 st.error(f"❌ Error generating prediction: {e}")
 
 # ---------------------------
+# Page: AI Research Assistant (NEW)
+# ---------------------------
+elif page == "🤖 AI Research Assistant":
+    st.header("🤖 AI Research Assistant")
+    st.markdown("Ask any investment question and get AI-powered insights with real market data!")
+    
+    # Quick action buttons
+    st.markdown("### 💡 Quick Questions")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🚀 Hot Stocks Today", use_container_width=True):
+            st.session_state.research_query = "Which stocks are showing the strongest momentum today? Analyze top gainers."
+    with col2:
+        if st.button("📉 Oversold Opportunities", use_container_width=True):
+            st.session_state.research_query = "Find oversold stocks with RSI < 30 that might bounce back soon."
+    with col3:
+        if st.button("🏆 Top Tech Stocks", use_container_width=True):
+            st.session_state.research_query = "What are the best technology stocks to invest in right now?"
+    
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        if st.button("💰 Best Dividend Stocks", use_container_width=True):
+            st.session_state.research_query = "What are the highest dividend-paying stocks with stable fundamentals?"
+    with col5:
+        if st.button("🌟 Growth Stocks", use_container_width=True):
+            st.session_state.research_query = "Which growth stocks have the highest potential for 2025?"
+    with col6:
+        if st.button("🛡️ Safe Investments", use_container_width=True):
+            st.session_state.research_query = "What are the safest, low-risk stocks for conservative investors?"
+    
+    st.markdown("---")
+    
+    # Custom query input
+    if "research_query" not in st.session_state:
+        st.session_state.research_query = ""
+    
+    query = st.text_area(
+        "🔍 Ask your investment question:",
+        value=st.session_state.research_query,
+        height=100,
+        placeholder="Examples:\n- Which stocks will rise high this month and why?\n- Compare AAPL vs MSFT for long-term investment\n- What are the best Indian stocks in the EV sector?\n- Should I buy Tesla now? Analyze risks and opportunities"
+    )
+    
+    # Analysis depth
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        tickers_to_analyze = st.text_input(
+            "📊 Specific tickers to analyze (optional, comma-separated)",
+            placeholder="e.g., AAPL,MSFT,GOOGL or INFY.NS,TCS.NS",
+            help="Leave empty for general analysis"
+        )
+    with col2:
+        depth = st.selectbox("Analysis Depth", ["Quick", "Detailed", "Deep Dive"], index=1)
+    
+    if st.button("🔍 Research & Analyze", type="primary", use_container_width=True):
+        if not query.strip():
+            st.error("❌ Please enter a question!")
+        else:
+            with st.spinner("🤖 AI is researching your question..."):
+                try:
+                    # Parse tickers if provided
+                    tickers_list = []
+                    if tickers_to_analyze.strip():
+                        tickers_list = [t.strip().upper() for t in tickers_to_analyze.split(",") if t.strip()]
+                    
+                    # Build comprehensive analysis
+                    analysis_data = {}
+                    
+                    if tickers_list:
+                        st.info(f"📊 Analyzing {len(tickers_list)} ticker(s)...")
+                        
+                        for ticker in tickers_list:
+                            with st.expander(f"📈 Data for {ticker}", expanded=False):
+                                try:
+                                    t = yf.Ticker(ticker)
+                                    hist = t.history(period="3mo")
+                                    info = getattr(t, "info", {}) or {}
+                                    
+                                    if hist is not None and not hist.empty:
+                                        df = compute_indicators(hist)
+                                        risk_score, risk_level, risk_breakdown = calculate_risk_score(df)
+                                        signal = generate_signal(df)
+                                        
+                                        # Display quick metrics
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        col1.metric("Price", f"${df['Close'].iloc[-1]:.2f}")
+                                        col2.metric("Signal", signal)
+                                        col3.metric("Risk", f"{risk_score}/100")
+                                        col4.metric("RSI", f"{df['RSI'].iloc[-1]:.1f}")
+                                        
+                                        # Store data for AI
+                                        analysis_data[ticker] = {
+                                            "current_price": df['Close'].iloc[-1],
+                                            "signal": signal,
+                                            "risk_score": risk_score,
+                                            "risk_level": risk_level,
+                                            "rsi": df['RSI'].iloc[-1],
+                                            "ema20": df['EMA20'].iloc[-1],
+                                            "ema50": df['EMA50'].iloc[-1],
+                                            "macd": df['MACD'].iloc[-1],
+                                            "market_cap": info.get("marketCap", "N/A"),
+                                            "pe_ratio": info.get("trailingPE", "N/A"),
+                                            "52w_high": info.get("fiftyTwoWeekHigh", "N/A"),
+                                            "52w_low": info.get("fiftyTwoWeekLow", "N/A"),
+                                            "sector": info.get("sector", "N/A"),
+                                            "industry": info.get("industry", "N/A")
+                                        }
+                                    else:
+                                        st.warning(f"No data for {ticker}")
+                                except Exception as e:
+                                    st.error(f"Error fetching {ticker}: {e}")
+                    
+                    # Build AI prompt
+                    st.markdown("---")
+                    st.subheader("🤖 AI Analysis")
+                    
+                    if depth == "Quick":
+                        detail_instruction = "Provide a concise 3-4 paragraph analysis."
+                    elif depth == "Detailed":
+                        detail_instruction = "Provide a comprehensive analysis with clear sections and actionable insights."
+                    else:
+                        detail_instruction = "Provide an in-depth, research-grade analysis with detailed reasoning, multiple perspectives, and risk considerations."
+                    
+                    if analysis_data:
+                        data_summary = "\n\n".join([
+                            f"**{ticker}:**\n" + 
+                            f"- Price: ${data['current_price']:.2f}\n" +
+                            f"- Technical Signal: {data['signal']}\n" +
+                            f"- Risk Score: {data['risk_score']}/100 ({data['risk_level']})\n" +
+                            f"- RSI: {data['rsi']:.1f}\n" +
+                            f"- EMA20: ${data['ema20']:.2f}, EMA50: ${data['ema50']:.2f}\n" +
+                            f"- Market Cap: {data['market_cap']}\n" +
+                            f"- P/E Ratio: {data['pe_ratio']}\n" +
+                            f"- Sector: {data['sector']}, Industry: {data['industry']}\n"
+                            for ticker, data in analysis_data.items()
+                        ])
+                        
+                        prompt = f"""You are a senior investment analyst and financial advisor. A client has asked: "{query}"
+
+I've gathered real-time market data for the following stocks:
+
+{data_summary}
+
+{detail_instruction}
+
+Please provide:
+1. **Direct Answer** to the question
+2. **Stock Recommendations** with specific tickers and reasoning
+3. **Risk Assessment** for each recommendation
+4. **Entry/Exit Strategy** if applicable
+5. **Key Catalysts** to watch
+6. **Alternative Options** if relevant
+7. **Important Disclaimers** and risks
+
+Use the actual data provided above. Be specific, actionable, and honest about uncertainties."""
+                    else:
+                        prompt = f"""You are a senior investment analyst and financial advisor. A client has asked: "{query}"
+
+{detail_instruction}
+
+Please provide:
+1. **Direct Answer** to the question
+2. **Stock Recommendations** with specific reasoning (suggest 3-5 tickers if applicable)
+3. **Analysis Framework** - what factors to consider
+4. **Risk Considerations** 
+5. **Market Context** - current market conditions relevant to this question
+6. **Action Plan** - concrete steps the investor should take
+7. **Important Disclaimers**
+
+Be specific, provide ticker symbols where relevant, and explain your reasoning clearly."""
+                    
+                    with st.spinner("🧠 Generating comprehensive analysis..."):
+                        ai_response = ask_gemini(prompt)
+                    
+                    st.markdown(ai_response)
+                    
+                    # Add disclaimer
+                    st.warning("⚠️ **Disclaimer**: This is AI-generated analysis based on current data. Always conduct your own research and consult with a licensed financial advisor before making investment decisions.")
+                    
+                    # Save query option
+                    if st.button("💾 Save this analysis"):
+                        st.success("✅ Analysis saved! (Feature coming soon - will save to local database)")
+                    
+                except Exception as e:
+                    st.error(f"❌ Error during research: {e}")
+
+# ---------------------------
+# Page: Market Screener (NEW)
+# ---------------------------
+elif page == "📊 Market Screener":
+    st.header("📊 Market Screener")
+    st.markdown("Find stocks matching your criteria with real-time technical analysis")
+    
+    st.markdown("### 🎯 Screening Criteria")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**📈 Technical Filters**")
+        rsi_min = st.slider("Min RSI", 0, 100, 30, help="Find oversold (30) or overbought (70) stocks")
+        rsi_max = st.slider("Max RSI", 0, 100, 70)
+        
+        signal_filter = st.multiselect(
+            "Trading Signal",
+            ["BUY", "SELL", "HOLD"],
+            default=["BUY"],
+            help="Filter by EMA crossover signal"
+        )
+    
+    with col2:
+        st.markdown("**⚠️ Risk Filters**")
+        risk_max = st.slider("Max Risk Score", 0, 100, 60, help="Filter out high-risk stocks")
+        
+        sectors = st.multiselect(
+            "Sectors (optional)",
+            ["Technology", "Healthcare", "Finance", "Energy", "Consumer", "Industrial"],
+            help="Leave empty for all sectors"
+        )
+    
+    # Stock universe
+    st.markdown("### 📋 Stock Universe")
+    
+    preset = st.radio(
+        "Choose preset or custom:",
+        ["🇺🇸 US Top 50", "🇮🇳 Indian Nifty 50", "💎 Custom List"],
+        horizontal=True
+    )
+    
+    if preset == "🇺🇸 US Top 50":
+        stock_universe = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK.B", "JPM", "JNJ",
+                         "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "NFLX", "ADBE", "CRM",
+                         "INTC", "CSCO", "PFE", "KO", "PEP", "ABT", "TMO", "COST", "AVGO", "ACN"]
+    elif preset == "🇮🇳 Indian Nifty 50":
+        stock_universe = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "HINDUNILVR.NS", 
+                         "ICICIBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "KOTAKBANK.NS",
+                         "LT.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS", "TITAN.NS",
+                         "WIPRO.NS", "HCLTECH.NS", "ULTRACEMCO.NS", "BAJFINANCE.NS", "NESTLEIND.NS"]
+    else:
+        custom_input = st.text_area(
+            "Enter tickers (comma-separated)",
+            "AAPL,MSFT,GOOGL,TSLA",
+            help="Enter tickers with proper suffix (e.g., .NS for India)"
+        )
+        stock_universe = [t.strip().upper() for t in custom_input.split(",") if t.strip()]
+    
+    st.info(f"📊 Will screen {len(stock_universe)} stocks")
+    
+    if st.button("🔍 Run Screener", type="primary", use_container_width=True):
+        with st.spinner(f"Screening {len(stock_universe)} stocks... This may take a minute..."):
+            results = []
+            progress_bar = st.progress(0)
+            
+            for idx, ticker in enumerate(stock_universe):
+                try:
+                    t = yf.Ticker(ticker)
+                    hist = t.history(period="3mo")
+                    
+                    if hist is not None and not hist.empty and len(hist) > 50:
+                        df = compute_indicators(hist)
+                        risk_score, risk_level, _ = calculate_risk_score(df)
+                        signal = generate_signal(df)
+                        
+                        current_rsi = df['RSI'].iloc[-1]
+                        current_price = df['Close'].iloc[-1]
+                        
+                        # Apply filters
+                        if (rsi_min <= current_rsi <= rsi_max and 
+                            signal in signal_filter and 
+                            risk_score <= risk_max):
+                            
+                            info = getattr(t, "info", {}) or {}
+                            
+                            results.append({
+                                "Ticker": ticker,
+                                "Price": f"${current_price:.2f}",
+                                "Signal": signal,
+                                "RSI": f"{current_rsi:.1f}",
+                                "Risk": f"{risk_score:.0f}",
+                                "Risk Level": risk_level,
+                                "Sector": info.get("sector", "N/A"),
+                                "Market Cap": info.get("marketCap", 0)
+                            })
+                    
+                    progress_bar.progress((idx + 1) / len(stock_universe))
+                    
+                except Exception:
+                    continue
+            
+            progress_bar.empty()
+            
+            if results:
+                st.success(f"✅ Found {len(results)} stocks matching your criteria!")
+                
+                results_df = pd.DataFrame(results)
+                
+                # Sort by Risk Score (ascending)
+                results_df = results_df.sort_values("Risk", ascending=True)
+                
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+                
+                # AI Summary
+                st.markdown("---")
+                st.subheader("🤖 AI Screening Summary")
+                
+                top_picks = results_df.head(5)['Ticker'].tolist()
+                
+                prompt = f"""Based on a technical screening of stocks, these {len(results)} stocks passed the following criteria:
+- RSI between {rsi_min} and {rsi_max}
+- Trading signals: {', '.join(signal_filter)}
+- Maximum risk score: {risk_max}
+
+Top 5 picks from screening: {', '.join(top_picks)}
+
+Please provide:
+1. **Overview** of what these criteria mean
+2. **Analysis of top 3 picks** - why they stand out
+3. **Investment strategy** for these stocks
+4. **Risks to consider**
+5. **Next steps** for investors
+
+Be concise but insightful."""
+                
+                with st.spinner("Getting AI insights..."):
+                    ai_summary = ask_gemini(prompt)
+                
+                st.markdown(ai_summary)
+                
+            else:
+                st.warning("⚠️ No stocks found matching your criteria. Try adjusting the filters.")
+
+# ---------------------------
+# Page: Compare Stocks (NEW)
+# ---------------------------
+elif page == "📚 Compare Stocks":
+    st.header("📚 Side-by-Side Stock Comparison")
+    st.markdown("Compare multiple stocks across all key metrics")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        ticker1 = st.text_input("Stock 1", "AAPL", key="comp1").upper()
+    with col2:
+        ticker2 = st.text_input("Stock 2", "MSFT", key="comp2").upper()
+    
+    col3, col4 = st.columns(2)
+    with col3:
+        ticker3 = st.text_input("Stock 3 (optional)", "", key="comp3").upper()
+    with col4:
+        ticker4 = st.text_input("Stock 4 (optional)", "", key="comp4").upper()
+    
+    compare_period = st.selectbox("Comparison Period", ["1mo", "3mo", "6mo", "1y"], index=1)
+    
+    if st.button("📊 Compare", type="primary", use_container_width=True):
+        tickers = [t for t in [ticker1, ticker2, ticker3, ticker4] if t]
+        
+        if len(tickers) < 2:
+            st.error("❌ Please enter at least 2 tickers to compare")
+        else:
+            comparison_data = []
+            price_history = {}
+            
+            with st.spinner(f"Analyzing {len(tickers)} stocks..."):
+                for ticker in tickers:
+                    try:
+                        t = yf.Ticker(ticker)
+                        hist = t.history(period=compare_period)
+                        info = getattr(t, "info", {}) or {}
+                        
+                        if hist is not None and not hist.empty:
+                            df = compute_indicators(hist)
+                            risk_score, risk_level, _ = calculate_risk_score(df)
+                            signal = generate_signal(df)
+                            
+                            # Calculate returns
+                            start_price = hist['Close'].iloc[0]
+                            end_price = hist['Close'].iloc[-1]
+                            returns = ((end_price - start_price) / start_price) * 100
+                            
+                            price_history[ticker] = hist['Close']
+                            
+                            comparison_data.append({
+                                "Ticker": ticker,
+                                "Price": f"${end_price:.2f}",
+                                f"{compare_period} Return": f"{returns:+.2f}%",
+                                "Signal": signal,
+                                "RSI": f"{df['RSI'].iloc[-1]:.1f}",
+                                "Risk Score": f"{risk_score:.0f}/100",
+                                "Risk Level": risk_level,
+                                "Market Cap": info.get("marketCap", "N/A"),
+                                "P/E Ratio": info.get("trailingPE", "N/A"),
+                                "Sector": info.get("sector", "N/A"),
+                                "52W High": info.get("fiftyTwoWeekHigh", "N/A"),
+                                "52W Low": info.get("fiftyTwoWeekLow", "N/A")
+                            })
+                    except Exception as e:
+                        st.error(f"Error analyzing {ticker}: {e}")
+            
+            if comparison_data:
+                # Comparison table
+                st.subheader("📊 Comparison Table")
+                comp_df = pd.DataFrame(comparison_data)
+                st.dataframe(comp_df, use_container_width=True, hide_index=True)
+                
+                # Price comparison chart
+                st.subheader("📈 Price Performance Comparison")
+                
+                if price_history:
+                    fig = go.Figure()
+                    
+                    for ticker, prices in price_history.items():
+                        # Normalize to 100 for fair comparison
+                        normalized = (prices / prices.iloc[0]) * 100
+                        fig.add_trace(go.Scatter(
+                            x=normalized.index,
+                            y=normalized,
+                            mode="lines",
+                            name=ticker,
+                            line=dict(width=3)
+                        ))
+                    
+                    fig.update_layout(
+                        template="plotly_dark",
+                        height=450,
+                        xaxis_title="Date",
+                        yaxis_title="Normalized Price (Base = 100)",
+                        hovermode="x unified",
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # AI Comparison
+                st.markdown("---")
+                st.subheader("🤖 AI Comparison Analysis")
+                
+                comparison_summary = "\n".join([
+                    f"**{row['Ticker']}:** Price ${row['Price']}, {compare_period} Return: {row[f'{compare_period} Return']}, "
+                    f"Signal: {row['Signal']}, Risk: {row['Risk Score']}, P/E: {row['P/E Ratio']}, Sector: {row['Sector']}"
+                    for row in comparison_data
+                ])
+                
+                prompt = f"""Compare these stocks for investment decision:
+
+{comparison_summary}
+
+Provide a comprehensive comparison including:
+1. **Winner Analysis** - Which stock is the best choice and why?
+2. **Strengths & Weaknesses** of each stock
+3. **Risk Comparison** - Which is safest/riskiest?
+4. **Investment Scenarios** - Which stock for which type of investor?
+5. **Key Differentiators** - What sets each apart?
+6. **Final Recommendation** with reasoning
+
+Be specific and actionable. Consider both technical and fundamental factors."""
+                
+                with st.spinner("🤖 Generating comparison insights..."):
+                    ai_comparison = ask_gemini(prompt)
+                
+                st.markdown(ai_comparison)
+                
+                st.info("💡 **Tip**: Use this comparison to make informed decisions based on your investment goals and risk tolerance.")
+
+# ---------------------------
 # Page: Settings
 # ---------------------------
 elif page == "⚙️ Settings":
@@ -1189,7 +1654,7 @@ elif page == "⚙️ Settings":
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p><strong>Gemini Investment Terminal</strong> — Built for Captain Suhas</p>
+    <p><strong>Gemini Investment Terminal</strong> — Built by Suhas</p>
     <p>🗄️ Local SQLite persistence enabled | 🤖 Powered by Gemini AI</p>
     <p style='font-size: 0.8em;'>⚠️ For educational purposes only. Not financial advice.</p>
 </div>
