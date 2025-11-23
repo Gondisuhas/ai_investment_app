@@ -53,11 +53,14 @@ def pick_gemini_model():
         for m in models:
             name = getattr(m, "name", "")
             supported = getattr(m, "supported_generation_methods", []) or []
-            if "gemini-1.5" in name and "generateContent" in supported:
-                return name.replace("models/", "")
-        return "gemini-1.5-flash"
+            # Remove 'models/' prefix if present
+            clean_name = name.replace("models/", "")
+            if "gemini-1.5" in clean_name and "generateContent" in supported:
+                return clean_name
+        # Fallback to common model names
+        return "gemini-1.5-flash-latest"
     except Exception:
-        return "gemini-1.5-flash"
+        return "gemini-1.5-flash-latest"
 
 MODEL_NAME = pick_gemini_model()
 
@@ -168,9 +171,29 @@ def ask_gemini(prompt):
     if not GOOGLE_API_KEY:
         return "⚠️ Gemini not configured. Add GOOGLE_API_KEY to Streamlit secrets to enable AI features."
     try:
-        model = genai.GenerativeModel(MODEL_NAME)
-        resp = model.generate_content(prompt)
-        return getattr(resp, "text", str(resp))
+        # Try different model names if the current one fails
+        model_names = [
+            MODEL_NAME,
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro-latest",
+            "gemini-pro"
+        ]
+        
+        for model_name in model_names:
+            if not model_name:
+                continue
+            try:
+                model = genai.GenerativeModel(model_name)
+                resp = model.generate_content(prompt)
+                return getattr(resp, "text", str(resp))
+            except Exception as e:
+                if "404" in str(e) and model_name != model_names[-1]:
+                    continue  # Try next model
+                else:
+                    raise e
+        
+        return "❌ Could not find a working Gemini model. Please check the Settings page."
     except Exception as e:
         return f"❌ Gemini error: {e}"
 
