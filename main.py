@@ -169,7 +169,110 @@ def compute_indicators(df):
     
     return df
 
-def generate_signal(df):
+def calculate_risk_score(df):
+    """
+    Calculate a quantitative risk score (0-100) based on technical indicators
+    Higher score = Higher risk
+    
+    Factors:
+    - Volatility (30%): Higher volatility = higher risk
+    - RSI extremes (20%): Overbought/oversold = higher risk
+    - Price momentum (20%): Declining trend = higher risk
+    - MACD divergence (15%): Weak momentum = higher risk
+    - Volume trend (15%): Declining volume = higher risk
+    """
+    try:
+        if df is None or df.empty or len(df) < 30:
+            return 50, "Insufficient data"
+        
+        risk_components = {}
+        
+        # 1. Volatility Risk (30 points)
+        returns = df['Close'].pct_change().dropna()
+        volatility = returns.std() * np.sqrt(252)  # Annualized volatility
+        vol_risk = min(volatility * 100, 30)  # Cap at 30
+        risk_components['Volatility'] = round(vol_risk, 1)
+        
+        # 2. RSI Risk (20 points)
+        current_rsi = df['RSI'].iloc[-1]
+        if pd.isna(current_rsi):
+            rsi_risk = 10
+        elif current_rsi > 70:  # Overbought
+            rsi_risk = 20 * (current_rsi - 70) / 30
+        elif current_rsi < 30:  # Oversold
+            rsi_risk = 20 * (30 - current_rsi) / 30
+        else:  # Neutral zone
+            rsi_risk = 5
+        risk_components['RSI'] = round(rsi_risk, 1)
+        
+        # 3. Price Momentum Risk (20 points)
+        # Compare recent prices to 30-day average
+        recent_avg = df['Close'].tail(5).mean()
+        month_avg = df['Close'].tail(30).mean()
+        momentum_change = (recent_avg - month_avg) / month_avg
+        
+        if momentum_change < -0.05:  # Declining > 5%
+            momentum_risk = 20
+        elif momentum_change < 0:  # Slightly declining
+            momentum_risk = 10
+        elif momentum_change > 0.05:  # Rising > 5%
+            momentum_risk = 5
+        else:  # Slightly rising
+            momentum_risk = 8
+        risk_components['Momentum'] = round(momentum_risk, 1)
+        
+        # 4. MACD Risk (15 points)
+        current_macd = df['MACD'].iloc[-1]
+        current_signal = df['Signal'].iloc[-1]
+        
+        if pd.isna(current_macd) or pd.isna(current_signal):
+            macd_risk = 7.5
+        else:
+            macd_diff = current_macd - current_signal
+            if macd_diff < 0:  # Bearish
+                macd_risk = 15
+            elif abs(macd_diff) < 0.5:  # Weak signal
+                macd_risk = 10
+            else:  # Bullish
+                macd_risk = 5
+        risk_components['MACD'] = round(macd_risk, 1)
+        
+        # 5. Volume Risk (15 points)
+        if 'Volume' in df.columns:
+            recent_vol = df['Volume'].tail(5).mean()
+            avg_vol = df['Volume'].tail(30).mean()
+            
+            if avg_vol > 0:
+                vol_ratio = recent_vol / avg_vol
+                if vol_ratio < 0.7:  # Low volume
+                    volume_risk = 15
+                elif vol_ratio < 0.9:
+                    volume_risk = 10
+                else:
+                    volume_risk = 5
+            else:
+                volume_risk = 7.5
+        else:
+            volume_risk = 7.5
+        risk_components['Volume'] = round(volume_risk, 1)
+        
+        # Total Risk Score
+        total_risk = sum(risk_components.values())
+        
+        # Risk Level Classification
+        if total_risk < 30:
+            risk_level = "Low Risk 🟢"
+        elif total_risk < 50:
+            risk_level = "Moderate Risk 🟡"
+        elif total_risk < 70:
+            risk_level = "High Risk 🟠"
+        else:
+            risk_level = "Very High Risk 🔴"
+        
+        return round(total_risk, 1), risk_level, risk_components
+        
+    except Exception as e:
+        return 50, "Calculation Error", {"Error": str(e)}
     """Generate trading signal based on EMA crossover"""
     try:
         if len(df) < 2:
@@ -223,7 +326,7 @@ def ask_gemini(prompt):
 # Page Configuration
 # ---------------------------
 st.set_page_config(
-    page_title="Ai Investment Buddy ",
+    page_title="Gemini Investment Terminal",
     layout="wide",
     page_icon="📊",
     initial_sidebar_state="expanded"
@@ -253,8 +356,8 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔐 AI Investment Terminal")
-    st.markdown("### Welcome, Partner")
+    st.title("🔐 Gemini Investment Terminal")
+    st.markdown("### Welcome, Captain Suhas")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -272,8 +375,8 @@ if not st.session_state.authenticated:
 # ---------------------------
 # Main Application
 # ---------------------------
-st.markdown('<p class="main-header">📊 AI Investment Terminal</p>', unsafe_allow_html=True)
-st.markdown("**Dashboard**")
+st.markdown('<p class="main-header">📊 Gemini Investment Terminal</p>', unsafe_allow_html=True)
+st.markdown("**Captain Suhas Dashboard**")
 
 # Sidebar Navigation
 with st.sidebar:
@@ -318,7 +421,7 @@ if "last_refresh" not in st.session_state:
 # Page: Home
 # ---------------------------
 if page == "🏠 Home":
-    st.header("🏠 Welcome, Partner !")
+    st.header("🏠 Welcome, Captain Suhas")
     
     col1, col2 = st.columns(2)
     
@@ -488,6 +591,9 @@ elif page == "📈 Stock Analyzer":
                     st.subheader("📊 Technical Analysis")
                     df = compute_indicators(hist)
                     
+                    # Calculate Risk Score
+                    risk_score, risk_level, risk_breakdown = calculate_risk_score(df)
+                    
                     col1, col2 = st.columns(2)
                     
                     with col1:
@@ -511,6 +617,36 @@ elif page == "📈 Stock Analyzer":
                         elif rsi_val < 30:
                             st.info("💡 Oversold (RSI < 30)")
                     
+                    # Risk Score Display
+                    st.markdown("---")
+                    st.subheader("⚠️ Quantitative Risk Analysis")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Risk Score", f"{risk_score}/100")
+                    col2.metric("Risk Level", risk_level)
+                    col3.metric("Technical Signal", signal)
+                    
+                    # Risk Breakdown
+                    st.write("**Risk Components:**")
+                    risk_df = pd.DataFrame([
+                        {"Factor": "Volatility (30%)", "Score": risk_breakdown.get('Volatility', 0), "Max": 30},
+                        {"Factor": "RSI Extremes (20%)", "Score": risk_breakdown.get('RSI', 0), "Max": 20},
+                        {"Factor": "Price Momentum (20%)", "Score": risk_breakdown.get('Momentum', 0), "Max": 20},
+                        {"Factor": "MACD Signal (15%)", "Score": risk_breakdown.get('MACD', 0), "Max": 15},
+                        {"Factor": "Volume Trend (15%)", "Score": risk_breakdown.get('Volume', 0), "Max": 15}
+                    ])
+                    
+                    st.dataframe(risk_df, use_container_width=True, hide_index=True)
+                    
+                    st.info("""
+                    **How Risk is Calculated:**
+                    - **Volatility**: Higher price swings = higher risk
+                    - **RSI**: Overbought (>70) or oversold (<30) = higher risk
+                    - **Momentum**: Declining price trend = higher risk
+                    - **MACD**: Bearish signal or weak momentum = higher risk
+                    - **Volume**: Declining volume = higher risk (less liquidity)
+                    """)
+                    
                     # Recent indicator data
                     st.write("**Recent Technical Data:**")
                     st.dataframe(
@@ -528,15 +664,23 @@ Latest data:
 - EMA50: ${df['EMA50'].iloc[-1]:.2f}
 - RSI: {df['RSI'].iloc[-1]:.2f}
 - Technical Signal: {signal}
+- Calculated Risk Score: {risk_score}/100 ({risk_level})
+
+Risk Breakdown:
+- Volatility Risk: {risk_breakdown.get('Volatility', 0)}/30
+- RSI Risk: {risk_breakdown.get('RSI', 0)}/20
+- Momentum Risk: {risk_breakdown.get('Momentum', 0)}/20
+- MACD Risk: {risk_breakdown.get('MACD', 0)}/15
+- Volume Risk: {risk_breakdown.get('Volume', 0)}/15
 
 Provide:
-1. Sentiment (Bullish/Neutral/Bearish)
-2. Risk Score (0-100)
-3. Recommendation (Buy/Hold/Sell)
-4. Key reasoning (2-3 points)
+1. Overall Sentiment (Bullish/Neutral/Bearish) - explain why based on the metrics
+2. Commentary on the risk score - is it justified?
+3. Recommendation (Buy/Hold/Sell) with conviction level
+4. Key technical levels to watch (support/resistance)
 5. Important considerations for investors
 
-Keep response concise and actionable."""
+Keep response concise and actionable. Focus on interpreting the quantitative data provided."""
                     
                     with st.spinner("🤖 Consulting Gemini AI..."):
                         ai_response = ask_gemini(prompt)
@@ -1030,7 +1174,7 @@ elif page == "⚙️ Settings":
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p><strong>AI Investment Buddy</strong> — Built by Suhas</p>
+    <p><strong>Gemini Investment Terminal</strong> — Built for Captain Suhas</p>
     <p>🗄️ Local SQLite persistence enabled | 🤖 Powered by Gemini AI</p>
     <p style='font-size: 0.8em;'>⚠️ For educational purposes only. Not financial advice.</p>
 </div>
