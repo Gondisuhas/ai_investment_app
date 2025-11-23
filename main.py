@@ -457,8 +457,9 @@ if page == "🏠 Home":
         st.markdown("""
         ### 💡 Pro Tips
         
-        - **Indian Stocks**: Use `.NS` suffix (e.g., `TCS.NS`, `INFY.NS`)
+        - **Indian Stocks**: Use `.NS` suffix (e.g., `TCS.NS`, `INFY.NS`)            
         - **US Stocks**: Direct ticker (e.g., `AAPL`, `MSFT`)
+        - **Paris Stocks**: Use `.PA` suffix (e.g., `EL.PA`, `RMS.PA`)             
         - **Crypto**: Use format `BTC-USD`, `ETH-USD`
         - **Portfolio**: Data persists in SQLite database
         - **AI Features**: Requires Gemini API key in secrets
