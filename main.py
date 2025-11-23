@@ -254,7 +254,7 @@ if "authenticated" not in st.session_state:
 
 if not st.session_state.authenticated:
     st.title("🔐 AI Investment Terminal")
-    st.markdown("### Welcome, Captain Partner")
+    st.markdown("### Welcome, Partner")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -1030,7 +1030,7 @@ elif page == "⚙️ Settings":
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p><strong>AI Investment Buddy</strong> — Built for Suhas</p>
+    <p><strong>AI Investment Buddy</strong> — Built by Suhas</p>
     <p>🗄️ Local SQLite persistence enabled | 🤖 Powered by Gemini AI</p>
     <p style='font-size: 0.8em;'>⚠️ For educational purposes only. Not financial advice.</p>
 </div>
