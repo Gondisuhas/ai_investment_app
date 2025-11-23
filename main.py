@@ -19,9 +19,16 @@ except Exception:
 # ---------------------------
 # Configuration & Secrets
 # ---------------------------
-# Use streamlit secrets properly
-GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY", "")
-APP_PASSWORD = st.secrets.get("APP_PASSWORD", "password123")
+# Safely access secrets with fallback
+try:
+    GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY", "")
+except (KeyError, FileNotFoundError):
+    GOOGLE_API_KEY = ""
+
+try:
+    APP_PASSWORD = st.secrets.get("APP_PASSWORD", "password123")
+except (KeyError, FileNotFoundError):
+    APP_PASSWORD = "password123"
 
 # Configure Gemini if available
 if GENAI_AVAILABLE and GOOGLE_API_KEY:
