@@ -340,7 +340,7 @@ def ask_gemini(prompt):
 # Page Configuration
 # ---------------------------
 st.set_page_config(
-    page_title="Gemini Investment Terminal",
+    page_title="AI Investment Buddy",
     layout="wide",
     page_icon="📊",
     initial_sidebar_state="expanded"
@@ -370,8 +370,8 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔐 Gemini Investment Terminal")
-    st.markdown("### Welcome, Captain Suhas")
+    st.title("🔐 AI Investment Buddy")
+    st.markdown("### Welcome, Buddy")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -389,8 +389,8 @@ if not st.session_state.authenticated:
 # ---------------------------
 # Main Application
 # ---------------------------
-st.markdown('<p class="main-header">📊 Gemini Investment Terminal</p>', unsafe_allow_html=True)
-st.markdown("**Captain Suhas Dashboard**")
+st.markdown('<p class="main-header">📊 AI Investment Buddy</p>', unsafe_allow_html=True)
+st.markdown("**Dashboard**")
 
 # Sidebar Navigation
 with st.sidebar:
@@ -437,7 +437,7 @@ if "last_refresh" not in st.session_state:
 # Page: Home
 # ---------------------------
 if page == "🏠 Home":
-    st.header("🏠 Welcome, Captain Suhas")
+    st.header("🏠 Welcome, Buddy")
     
     col1, col2 = st.columns(2)
     
@@ -1654,7 +1654,7 @@ elif page == "⚙️ Settings":
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p><strong>Gemini Investment Terminal</strong> — Built by Suhas</p>
+    <p><strong>AI Investment Buddy</strong> — Built by Suhas</p>
     <p>🗄️ Local SQLite persistence enabled | 🤖 Powered by Gemini AI</p>
     <p style='font-size: 0.8em;'>⚠️ For educational purposes only. Not financial advice.</p>
 </div>
