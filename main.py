@@ -20,7 +20,7 @@ except Exception:
 # Load env
 # ---------------------------
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GOOGLE_API_KEY = st.secrets("GOOGLE_API_KEY", "")
 APP_PASSWORD = os.getenv("APP_PASSWORD", "password123")  # default if not set
 
 # Configure Gemini if available
