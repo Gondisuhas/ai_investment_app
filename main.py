@@ -21,13 +21,19 @@ except Exception:
 # ---------------------------
 # Safely access secrets with fallback
 try:
-    GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY", "")
-except (KeyError, FileNotFoundError):
+    if "GOOGLE_API_KEY" in st.secrets:
+        GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+    else:
+        GOOGLE_API_KEY = ""
+except (KeyError, FileNotFoundError, Exception):
     GOOGLE_API_KEY = ""
 
 try:
-    APP_PASSWORD = st.secrets.get("APP_PASSWORD", "password123")
-except (KeyError, FileNotFoundError):
+    if "APP_PASSWORD" in st.secrets:
+        APP_PASSWORD = st.secrets["APP_PASSWORD"]
+    else:
+        APP_PASSWORD = "password123"
+except (KeyError, FileNotFoundError, Exception):
     APP_PASSWORD = "password123"
 
 # Configure Gemini if available
@@ -36,6 +42,7 @@ if GENAI_AVAILABLE and GOOGLE_API_KEY:
         genai.configure(api_key=GOOGLE_API_KEY)
     except Exception as e:
         st.sidebar.warning(f"Gemini configuration failed: {e}")
+        GENAI_AVAILABLE = False
 
 def pick_gemini_model():
     """Select the best available Gemini model"""
@@ -237,12 +244,21 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 🤖 AI Status")
-    if GENAI_AVAILABLE and GOOGLE_API_KEY:
+    
+    # Debug info for secrets
+    if GOOGLE_API_KEY:
+        st.success(f"✅ API Key: {GOOGLE_API_KEY[:8]}...{GOOGLE_API_KEY[-4:]}")
+    else:
+        st.error("❌ No API key found")
+    
+    if GENAI_AVAILABLE and GOOGLE_API_KEY and MODEL_NAME:
         st.success(f"✅ Model: `{MODEL_NAME}`")
+    elif GENAI_AVAILABLE and GOOGLE_API_KEY:
+        st.warning("⚠️ API key present but model not detected")
     elif GENAI_AVAILABLE:
         st.warning("⚠️ API key missing")
     else:
-        st.error("❌ Gemini unavailable")
+        st.error("❌ Gemini library not installed")
     
     st.markdown("---")
     if st.button("🚪 Logout", use_container_width=True):
