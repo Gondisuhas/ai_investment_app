@@ -169,6 +169,20 @@ def compute_indicators(df):
     
     return df
 
+def generate_signal(df):
+    """Generate trading signal based on EMA crossover"""
+    try:
+        if len(df) < 2:
+            return "N/A"
+        if df["EMA20"].iloc[-1] > df["EMA50"].iloc[-1]:
+            return "BUY"
+        elif df["EMA20"].iloc[-1] < df["EMA50"].iloc[-1]:
+            return "SELL"
+        else:
+            return "HOLD"
+    except Exception:
+        return "N/A"
+
 def calculate_risk_score(df):
     """
     Calculate a quantitative risk score (0-100) based on technical indicators
