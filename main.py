@@ -1141,7 +1141,7 @@ elif page == " AI Research Assistant":
                         st.info(f" Analyzing {len(tickers_list)} ticker(s)...")
                         
                         for ticker in tickers_list:
-                            with st.expander(f"📈 Data for {ticker}", expanded=False):
+                            with st.expander(f" Data for {ticker}", expanded=False):
                                 try:
                                     t = yf.Ticker(ticker)
                                     hist = t.history(period="3mo")
