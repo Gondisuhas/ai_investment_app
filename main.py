@@ -922,7 +922,7 @@ elif page == " News & Sentiment":
     with col2:
         ncount = st.slider("Headlines", 1, 10, 5)
     
-    if st.button("📰 Fetch News", use_container_width=True):
+    if st.button(" Fetch News", use_container_width=True):
         with st.spinner(f"Fetching news for {nt}..."):
             try:
                 t = yf.Ticker(nt)
