@@ -1293,7 +1293,7 @@ elif page == " Market Screener":
     
     preset = st.radio(
         "Choose preset or custom:",
-        ["🇺🇸 US Top 50", "🇮🇳 Indian Nifty 50", "💎 Custom List"],
+        ["🇺🇸 US Top 50", "🇮🇳 Indian Nifty 50", " Custom List"],
         horizontal=True
     )
     
