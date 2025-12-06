@@ -303,9 +303,9 @@ def calculate_risk_score(df):
 def ask_gemini(prompt):
     """Query Gemini API"""
     if not GENAI_AVAILABLE:
-        return "⚠️ Gemini AI is not available. Install google-generativeai package."
+        return " Gemini AI is not available. Install google-generativeai package."
     if not GOOGLE_API_KEY:
-        return "⚠️ Gemini not configured. Add GOOGLE_API_KEY to Streamlit secrets to enable AI features."
+        return " Gemini not configured. Add GOOGLE_API_KEY to Streamlit secrets to enable AI features."
     try:
         # Try different model names if the current one fails
         model_names = [
@@ -332,9 +332,9 @@ def ask_gemini(prompt):
                 else:
                     raise e
         
-        return "❌ Could not find a working Gemini model. Please check the Settings page."
+        return " Could not find a working Gemini model. Please check the Settings page."
     except Exception as e:
-        return f"❌ Gemini error: {e}"
+        return f" Gemini error: {e}"
 
 # ---------------------------
 # Page Configuration
@@ -342,7 +342,7 @@ def ask_gemini(prompt):
 st.set_page_config(
     page_title="AI Investment Buddy",
     layout="wide",
-    page_icon="📊",
+    page_icon="",
     initial_sidebar_state="expanded"
 )
 
@@ -370,62 +370,61 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔐 AI Investment Buddy")
+    st.title(" AI Investment Buddy")
     st.markdown("### Welcome, Buddy")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         pw = st.text_input("Enter app password", type="password", key="login_password")
-        if st.button("🚀 Login", use_container_width=True):
+        if st.button(" Login", use_container_width=True):
             if pw == APP_PASSWORD:
                 st.session_state.authenticated = True
-                st.success("✅ Login successful!")
+                st.success(" Login successful!")
                 time.sleep(0.5)
                 st.rerun()
             else:
-                st.error("❌ Incorrect password. Please try again.")
+                st.error(" Incorrect password. Please try again.")
     st.stop()
 
 # ---------------------------
 # Main Application
 # ---------------------------
-st.markdown('<p class="main-header">📊 AI Investment Buddy</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header"> AI Investment Buddy</p>', unsafe_allow_html=True)
 st.markdown("**Dashboard**")
 
 # Sidebar Navigation
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/000000/rocket.png", width=80)
-    st.markdown("### 🧭 Navigation")
-    pages = ["🏠 Home", "⚡ Real-Time", "📈 Stock Analyzer", "₿ Crypto", 
-             "💼 Portfolio", "📰 News & Sentiment", "🔮 Predictions", 
-             "🤖 AI Research Assistant", "📊 Market Screener", 
-             "📚 Compare Stocks", "⚙️ Settings"]
+    st.markdown("###  Navigation")
+    pages = [" Home", " Real-Time", " Stock Analyzer", " Crypto", 
+             " Portfolio", " News & Sentiment", " Predictions", 
+             " AI Research Assistant", " Market Screener", 
+             " Compare Stocks", " Settings"]
     page = st.selectbox("Select Page", pages, label_visibility="collapsed")
     
     st.markdown("---")
-    st.markdown("### ⚡ Controls")
+    st.markdown("###  Controls")
     refresh_auto = st.slider("Auto-refresh (sec)", 0, 60, 0, help="0 = disabled")
     
     st.markdown("---")
-    st.markdown("### 🤖 AI Status")
+    st.markdown("###  AI Status")
     
     # Debug info for secrets
     if GOOGLE_API_KEY:
-        st.success(f"✅ API Key: {GOOGLE_API_KEY[:8]}...{GOOGLE_API_KEY[-4:]}")
+        st.success(f" API Key: {GOOGLE_API_KEY[:8]}...{GOOGLE_API_KEY[-4:]}")
     else:
-        st.error("❌ No API key found")
+        st.error(" No API key found")
     
     if GENAI_AVAILABLE and GOOGLE_API_KEY and MODEL_NAME:
-        st.success(f"✅ Model: `{MODEL_NAME}`")
+        st.success(f" Model: `{MODEL_NAME}`")
     elif GENAI_AVAILABLE and GOOGLE_API_KEY:
-        st.warning("⚠️ API key present but model not detected")
+        st.warning(" API key present but model not detected")
     elif GENAI_AVAILABLE:
-        st.warning("⚠️ API key missing")
+        st.warning(" API key missing")
     else:
-        st.error("❌ Gemini library not installed")
+        st.error(" Gemini library not installed")
     
     st.markdown("---")
-    if st.button("🚪 Logout", use_container_width=True):
+    if st.button(" Logout", use_container_width=True):
         st.session_state.authenticated = False
         st.rerun()
 
@@ -436,28 +435,28 @@ if "last_refresh" not in st.session_state:
 # ---------------------------
 # Page: Home
 # ---------------------------
-if page == "🏠 Home":
-    st.header("🏠 Welcome, Buddy")
+if page == " Home":
+    st.header(" Welcome, Buddy")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("""
-        ### 🎯 Quick Start Guide
+        ###  Quick Start Guide
         
         **Navigation:**
-        - **⚡ Real-Time**: Live multi-ticker tracking with 1-minute charts
-        - **📈 Stock Analyzer**: Deep dive into stocks with AI analysis
-        - **₿ Crypto**: Cryptocurrency analysis and sentiment
-        - **💼 Portfolio**: Manage your positions (persistent storage)
-        - **📰 News & Sentiment**: Latest headlines with AI insights
-        - **🔮 Predictions**: AI-powered price forecasts
-        - **⚙️ Settings**: Diagnostics and configuration
+        - ** Real-Time**: Live multi-ticker tracking with 1-minute charts
+        - ** Stock Analyzer**: Deep dive into stocks with AI analysis
+        - ** Crypto**: Cryptocurrency analysis and sentiment
+        - ** Portfolio**: Manage your positions (persistent storage)
+        - ** News & Sentiment**: Latest headlines with AI insights
+        - ** Predictions**: AI-powered price forecasts
+        - ** Settings**: Diagnostics and configuration
         """)
     
     with col2:
         st.markdown("""
-        ### 💡 Pro Tips
+        ###  Pro Tips
         
         - **Indian Stocks**: Use `.NS` suffix (e.g., `TCS.NS`, `INFY.NS`)
         - **US Stocks**: Direct ticker (e.g., `AAPL`, `MSFT`)
@@ -466,13 +465,13 @@ if page == "🏠 Home":
         - **AI Features**: Requires Gemini API key in secrets
         """)
     
-    st.info("📌 **Note**: Your portfolio is stored locally in `portfolio.db` and persists between sessions.")
+    st.info(" **Note**: Your portfolio is stored locally in `portfolio.db` and persists between sessions.")
 
 # ---------------------------
 # Page: Real-Time
 # ---------------------------
-elif page == "⚡ Real-Time":
-    st.header("⚡ Real-Time Multi-Ticker Tracker")
+elif page == " Real-Time":
+    st.header(" Real-Time Multi-Ticker Tracker")
     
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -481,7 +480,7 @@ elif page == "⚡ Real-Time":
     with col2:
         st.write("")
         st.write("")
-        refresh_now = st.button("🔄 Refresh Now", use_container_width=True)
+        refresh_now = st.button(" Refresh Now", use_container_width=True)
     
     tickers = [t.strip().upper() for t in tickers_raw.split(",") if t.strip()]
     
@@ -492,13 +491,13 @@ elif page == "⚡ Real-Time":
         st.session_state.last_refresh = time.time()
         
         for t in tickers:
-            with st.expander(f"📊 {t}", expanded=True):
+            with st.expander(f" {t}", expanded=True):
                 try:
                     ticker_obj = yf.Ticker(t)
                     intraday = ticker_obj.history(period="1d", interval="1m")
                     
                     if intraday is None or intraday.empty:
-                        st.warning(f"⚠️ No intraday data for {t}. Check ticker format.")
+                        st.warning(f" No intraday data for {t}. Check ticker format.")
                         continue
                     
                     # Current price
@@ -541,13 +540,13 @@ elif page == "⚡ Real-Time":
                     st.plotly_chart(fig, use_container_width=True)
                     
                 except Exception as e:
-                    st.error(f"❌ Error fetching {t}: {e}")
+                    st.error(f" Error fetching {t}: {e}")
 
 # ---------------------------
 # Page: Stock Analyzer
 # ---------------------------
-elif page == "📈 Stock Analyzer":
-    st.header("📈 Stock Analyzer")
+elif page == " Stock Analyzer":
+    st.header(" Stock Analyzer")
     
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
@@ -557,17 +556,17 @@ elif page == "📈 Stock Analyzer":
     with col3:
         interval = st.selectbox("Interval", ["1d", "1wk"], index=0)
     
-    if st.button("🔍 Analyze Stock", use_container_width=True):
+    if st.button(" Analyze Stock", use_container_width=True):
         with st.spinner(f"Analyzing {ticker}..."):
             try:
                 t = yf.Ticker(ticker)
                 hist = t.history(period=period, interval=interval)
                 
                 if hist is None or hist.empty:
-                    st.error("❌ No data available for this ticker.")
+                    st.error(" No data available for this ticker.")
                 else:
                     # Price Chart
-                    st.subheader("📊 Price Chart")
+                    st.subheader(" Price Chart")
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=hist.index,
@@ -586,7 +585,7 @@ elif page == "📈 Stock Analyzer":
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Fundamentals
-                    st.subheader("📋 Fundamentals")
+                    st.subheader(" Fundamentals")
                     info = getattr(t, "info", {}) or {}
                     
                     cols = st.columns(4)
@@ -604,7 +603,7 @@ elif page == "📈 Stock Analyzer":
                             col.metric(label, value)
                     
                     # Technical Indicators
-                    st.subheader("📊 Technical Analysis")
+                    st.subheader(" Technical Analysis")
                     df = compute_indicators(hist)
                     
                     # Calculate Risk Score
@@ -629,13 +628,13 @@ elif page == "📈 Stock Analyzer":
                         # RSI interpretation
                         rsi_val = df['RSI'].iloc[-1]
                         if rsi_val > 70:
-                            st.warning("⚠️ Overbought (RSI > 70)")
+                            st.warning(" Overbought (RSI > 70)")
                         elif rsi_val < 30:
-                            st.info("💡 Oversold (RSI < 30)")
+                            st.info(" Oversold (RSI < 30)")
                     
                     # Risk Score Display
                     st.markdown("---")
-                    st.subheader("⚠️ Quantitative Risk Analysis")
+                    st.subheader(" Quantitative Risk Analysis")
                     
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Risk Score", f"{risk_score}/100")
@@ -671,7 +670,7 @@ elif page == "📈 Stock Analyzer":
                     )
                     
                     # AI Analysis
-                    st.subheader("🤖 AI Analysis")
+                    st.subheader(" AI Analysis")
                     prompt = f"""You are a senior market analyst. Analyze {ticker} based on its recent {period} performance.
                     
 Latest data:
@@ -698,19 +697,19 @@ Provide:
 
 Keep response concise and actionable. Focus on interpreting the quantitative data provided."""
                     
-                    with st.spinner("🤖 Consulting Gemini AI..."):
+                    with st.spinner(" Consulting Gemini AI..."):
                         ai_response = ask_gemini(prompt)
                     
                     st.markdown(ai_response)
                     
             except Exception as e:
-                st.error(f"❌ Error analyzing stock: {e}")
+                st.error(f" Error analyzing stock: {e}")
 
 # ---------------------------
 # Page: Crypto
 # ---------------------------
-elif page == "₿ Crypto":
-    st.header("₿ Cryptocurrency Analyzer")
+elif page == " Crypto":
+    st.header(" Cryptocurrency Analyzer")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -719,7 +718,7 @@ elif page == "₿ Crypto":
     with col2:
         c_period = st.selectbox("Period", ["1d", "5d", "1mo", "3mo", "6mo"], index=2)
     
-    if st.button("🔍 Analyze Crypto", use_container_width=True):
+    if st.button(" Analyze Crypto", use_container_width=True):
         with st.spinner(f"Analyzing {crypto}..."):
             try:
                 crypto_obj = yf.Ticker(crypto)
@@ -727,7 +726,7 @@ elif page == "₿ Crypto":
                 ch = crypto_obj.history(period=c_period, interval=interval)
                 
                 if ch is None or ch.empty:
-                    st.error("❌ No data available for this crypto ticker.")
+                    st.error(" No data available for this crypto ticker.")
                 else:
                     # Metrics
                     latest = ch["Close"].iloc[-1]
@@ -778,7 +777,7 @@ elif page == "₿ Crypto":
                     st.plotly_chart(fig_vol, use_container_width=True)
                     
                     # AI Sentiment
-                    st.subheader("🤖 AI Crypto Sentiment")
+                    st.subheader(" AI Crypto Sentiment")
                     prompt = f"""Analyze {crypto} cryptocurrency for the last {c_period}.
 
 Current data:
@@ -796,21 +795,21 @@ Provide:
 
 Be concise and specific."""
                     
-                    with st.spinner("🤖 Analyzing with Gemini..."):
+                    with st.spinner(" Analyzing with Gemini..."):
                         ai_response = ask_gemini(prompt)
                     
                     st.markdown(ai_response)
                     
             except Exception as e:
-                st.error(f"❌ Error analyzing crypto: {e}")
+                st.error(f" Error analyzing crypto: {e}")
 
 # ---------------------------
 # Page: Portfolio
 # ---------------------------
-elif page == "💼 Portfolio":
-    st.header("💼 Portfolio Management")
+elif page == " Portfolio":
+    st.header(" Portfolio Management")
     
-    st.markdown("### ➕ Add New Position")
+    st.markdown("###  Add New Position")
     
     with st.form("add_position", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
@@ -823,36 +822,36 @@ elif page == "💼 Portfolio":
             avg = st.number_input("Avg Price", min_value=0.0, value=0.0, step=0.01,
                                  help="0 = fetch current price")
         
-        submitted = st.form_submit_button("➕ Add Position", use_container_width=True)
+        submitted = st.form_submit_button(" Add Position", use_container_width=True)
         
         if submitted:
             ticker = ticker.upper().strip()
             if not ticker:
-                st.error("❌ Please enter a ticker symbol.")
+                st.error(" Please enter a ticker symbol.")
             else:
                 if avg == 0.0:
                     with st.spinner(f"Fetching current price for {ticker}..."):
                         cur = get_current_price(ticker)
                     if cur is None:
-                        st.error("❌ Could not fetch current price. Please enter average price manually.")
+                        st.error(" Could not fetch current price. Please enter average price manually.")
                     else:
                         add_position_db(ticker, qty, cur)
-                        st.success(f"✅ Added {qty} x {ticker} @ ${cur:.2f}")
+                        st.success(f" Added {qty} x {ticker} @ ${cur:.2f}")
                         time.sleep(0.5)
                         st.rerun()
                 else:
                     add_position_db(ticker, qty, avg)
-                    st.success(f"✅ Added {qty} x {ticker} @ ${avg:.2f}")
+                    st.success(f" Added {qty} x {ticker} @ ${avg:.2f}")
                     time.sleep(0.5)
                     st.rerun()
     
     st.markdown("---")
-    st.markdown("### 📊 Current Holdings")
+    st.markdown("###  Current Holdings")
     
     df = list_positions_db()
     
     if df.empty:
-        st.info("📭 No positions yet. Add your first position above!")
+        st.info(" No positions yet. Add your first position above!")
     else:
         # Compute live values
         rows = []
@@ -897,7 +896,7 @@ elif page == "💼 Portfolio":
         st.dataframe(pdf, use_container_width=True, hide_index=True)
         
         # Remove position
-        st.markdown("### 🗑️ Remove Position")
+        st.markdown("###  Remove Position")
         col1, col2 = st.columns([2, 1])
         
         with col1:
@@ -905,17 +904,17 @@ elif page == "💼 Portfolio":
         with col2:
             st.write("")
             st.write("")
-            if st.button("🗑️ Remove", use_container_width=True):
+            if st.button("Remove", use_container_width=True):
                 remove_position_db(rem_id)
-                st.success(f"✅ Position {rem_id} removed.")
+                st.success(f" Position {rem_id} removed.")
                 time.sleep(0.5)
                 st.rerun()
 
 # ---------------------------
 # Page: News & Sentiment
 # ---------------------------
-elif page == "📰 News & Sentiment":
-    st.header("📰 News & Sentiment Analysis")
+elif page == " News & Sentiment":
+    st.header(" News & Sentiment Analysis")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -930,7 +929,7 @@ elif page == "📰 News & Sentiment":
                 raw_news = getattr(t, "news", []) or []
                 
                 if not raw_news:
-                    st.warning("⚠️ No news available from yfinance. Coverage may vary by ticker.")
+                    st.warning("No news available from yfinance. Coverage may vary by ticker.")
                 else:
                     headlines = []
                     for item in raw_news[:ncount]:
@@ -942,7 +941,7 @@ elif page == "📰 News & Sentiment":
                             headlines.append({"title": title, "link": link, "publisher": publisher})
                     
                     if headlines:
-                        st.subheader(f"📰 Latest Headlines for {nt}")
+                        st.subheader(f" Latest Headlines for {nt}")
                         
                         for i, h in enumerate(headlines, 1):
                             with st.expander(f"{i}. {h['title']}", expanded=(i <= 3)):
@@ -952,7 +951,7 @@ elif page == "📰 News & Sentiment":
                         
                         # AI Sentiment Analysis
                         st.markdown("---")
-                        st.subheader("🤖 AI Sentiment Analysis")
+                        st.subheader(" AI Sentiment Analysis")
                         
                         headline_text = "\n".join([f"{i+1}. {h['title']}" for i, h in enumerate(headlines)])
                         
@@ -969,23 +968,23 @@ Provide:
 
 Be specific and actionable."""
                         
-                        with st.spinner("🤖 Analyzing sentiment with Gemini..."):
+                        with st.spinner(" Analyzing sentiment with Gemini..."):
                             ai_response = ask_gemini(prompt)
                         
                         st.markdown(ai_response)
                     else:
-                        st.warning("⚠️ Could not extract headlines from news data.")
+                        st.warning(" Could not extract headlines from news data.")
                         
             except Exception as e:
-                st.error(f"❌ Error fetching news: {e}")
+                st.error(f" Error fetching news: {e}")
 
 # ---------------------------
 # Page: Predictions
 # ---------------------------
-elif page == "🔮 Predictions":
-    st.header("🔮 AI Price Predictions")
+elif page == " Predictions":
+    st.header(" AI Price Predictions")
     
-    st.info("⚠️ **Disclaimer**: These are AI-generated predictions based on historical data and should NOT be used as financial advice. Always do your own research.")
+    st.info(" **Disclaimer**: These are AI-generated predictions based on historical data and should NOT be used as financial advice. Always do your own research.")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -1000,10 +999,10 @@ elif page == "🔮 Predictions":
                 hist = ticker_obj.history(period="6mo")
                 
                 if hist is None or hist.empty:
-                    st.error("❌ Not enough historical data for prediction.")
+                    st.error(" Not enough historical data for prediction.")
                 else:
                     # Display recent price action
-                    st.subheader("📊 Recent Price History")
+                    st.subheader(" Recent Price History")
                     
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
@@ -1034,7 +1033,7 @@ elif page == "🔮 Predictions":
                     
                     # AI Prediction
                     st.markdown("---")
-                    st.subheader("🤖 AI-Generated Forecast")
+                    st.subheader(" AI-Generated Forecast")
                     
                     prompt = f"""You are a quantitative analyst. Based on the recent 30-day closing prices for {pt}, provide a probabilistic forecast.
 
@@ -1058,46 +1057,46 @@ Provide:
 
 Be realistic and acknowledge uncertainty. Frame this as a probabilistic analysis, not a guarantee."""
                     
-                    with st.spinner("🤖 Generating forecast with Gemini..."):
+                    with st.spinner(" Generating forecast with Gemini..."):
                         ai_response = ask_gemini(prompt)
                     
                     st.markdown(ai_response)
                     
-                    st.warning("⚠️ **Important**: This prediction is based on historical patterns and AI analysis. Markets are unpredictable and many factors can affect prices. Never invest based solely on predictions.")
+                    st.warning(" **Important**: This prediction is based on historical patterns and AI analysis. Markets are unpredictable and many factors can affect prices. Never invest based solely on predictions.")
                     
             except Exception as e:
-                st.error(f"❌ Error generating prediction: {e}")
+                st.error(f" Error generating prediction: {e}")
 
 # ---------------------------
 # Page: AI Research Assistant (NEW)
 # ---------------------------
-elif page == "🤖 AI Research Assistant":
-    st.header("🤖 AI Research Assistant")
+elif page == " AI Research Assistant":
+    st.header(" AI Research Assistant")
     st.markdown("Ask any investment question and get AI-powered insights with real market data!")
     
     # Quick action buttons
-    st.markdown("### 💡 Quick Questions")
+    st.markdown("###  Quick Questions")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🚀 Hot Stocks Today", use_container_width=True):
+        if st.button(" Hot Stocks Today", use_container_width=True):
             st.session_state.research_query = "Which stocks are showing the strongest momentum today? Analyze top gainers."
     with col2:
-        if st.button("📉 Oversold Opportunities", use_container_width=True):
+        if st.button(" Oversold Opportunities", use_container_width=True):
             st.session_state.research_query = "Find oversold stocks with RSI < 30 that might bounce back soon."
     with col3:
-        if st.button("🏆 Top Tech Stocks", use_container_width=True):
+        if st.button(" Top Tech Stocks", use_container_width=True):
             st.session_state.research_query = "What are the best technology stocks to invest in right now?"
     
     col4, col5, col6 = st.columns(3)
     with col4:
-        if st.button("💰 Best Dividend Stocks", use_container_width=True):
+        if st.button(" Best Dividend Stocks", use_container_width=True):
             st.session_state.research_query = "What are the highest dividend-paying stocks with stable fundamentals?"
     with col5:
-        if st.button("🌟 Growth Stocks", use_container_width=True):
+        if st.button(" Growth Stocks", use_container_width=True):
             st.session_state.research_query = "Which growth stocks have the highest potential for 2025?"
     with col6:
-        if st.button("🛡️ Safe Investments", use_container_width=True):
+        if st.button(" Safe Investments", use_container_width=True):
             st.session_state.research_query = "What are the safest, low-risk stocks for conservative investors?"
     
     st.markdown("---")
@@ -1128,7 +1127,7 @@ elif page == "🤖 AI Research Assistant":
         if not query.strip():
             st.error("❌ Please enter a question!")
         else:
-            with st.spinner("🤖 AI is researching your question..."):
+            with st.spinner(" AI is researching your question..."):
                 try:
                     # Parse tickers if provided
                     tickers_list = []
@@ -1139,7 +1138,7 @@ elif page == "🤖 AI Research Assistant":
                     analysis_data = {}
                     
                     if tickers_list:
-                        st.info(f"📊 Analyzing {len(tickers_list)} ticker(s)...")
+                        st.info(f" Analyzing {len(tickers_list)} ticker(s)...")
                         
                         for ticker in tickers_list:
                             with st.expander(f"📈 Data for {ticker}", expanded=False):
@@ -1184,7 +1183,7 @@ elif page == "🤖 AI Research Assistant":
                     
                     # Build AI prompt
                     st.markdown("---")
-                    st.subheader("🤖 AI Analysis")
+                    st.subheader(" AI Analysis")
                     
                     if depth == "Quick":
                         detail_instruction = "Provide a concise 3-4 paragraph analysis."
@@ -1241,34 +1240,34 @@ Please provide:
 
 Be specific, provide ticker symbols where relevant, and explain your reasoning clearly."""
                     
-                    with st.spinner("🧠 Generating comprehensive analysis..."):
+                    with st.spinner(" Generating comprehensive analysis..."):
                         ai_response = ask_gemini(prompt)
                     
                     st.markdown(ai_response)
                     
                     # Add disclaimer
-                    st.warning("⚠️ **Disclaimer**: This is AI-generated analysis based on current data. Always conduct your own research and consult with a licensed financial advisor before making investment decisions.")
+                    st.warning(" **Disclaimer**: This is AI-generated analysis based on current data. Always conduct your own research and consult with a licensed financial advisor before making investment decisions.")
                     
                     # Save query option
-                    if st.button("💾 Save this analysis"):
-                        st.success("✅ Analysis saved! (Feature coming soon - will save to local database)")
+                    if st.button(" Save this analysis"):
+                        st.success("Analysis saved! (Feature coming soon - will save to local database)")
                     
                 except Exception as e:
-                    st.error(f"❌ Error during research: {e}")
+                    st.error(f" Error during research: {e}")
 
 # ---------------------------
 # Page: Market Screener (NEW)
 # ---------------------------
-elif page == "📊 Market Screener":
-    st.header("📊 Market Screener")
+elif page == " Market Screener":
+    st.header("Market Screener")
     st.markdown("Find stocks matching your criteria with real-time technical analysis")
     
-    st.markdown("### 🎯 Screening Criteria")
+    st.markdown("###  Screening Criteria")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("**📈 Technical Filters**")
+        st.markdown("** Technical Filters**")
         rsi_min = st.slider("Min RSI", 0, 100, 30, help="Find oversold (30) or overbought (70) stocks")
         rsi_max = st.slider("Max RSI", 0, 100, 70)
         
@@ -1280,7 +1279,7 @@ elif page == "📊 Market Screener":
         )
     
     with col2:
-        st.markdown("**⚠️ Risk Filters**")
+        st.markdown("** Risk Filters**")
         risk_max = st.slider("Max Risk Score", 0, 100, 60, help="Filter out high-risk stocks")
         
         sectors = st.multiselect(
@@ -1290,7 +1289,7 @@ elif page == "📊 Market Screener":
         )
     
     # Stock universe
-    st.markdown("### 📋 Stock Universe")
+    st.markdown("###  Stock Universe")
     
     preset = st.radio(
         "Choose preset or custom:",
@@ -1315,9 +1314,9 @@ elif page == "📊 Market Screener":
         )
         stock_universe = [t.strip().upper() for t in custom_input.split(",") if t.strip()]
     
-    st.info(f"📊 Will screen {len(stock_universe)} stocks")
+    st.info(f" Will screen {len(stock_universe)} stocks")
     
-    if st.button("🔍 Run Screener", type="primary", use_container_width=True):
+    if st.button(" Run Screener", type="primary", use_container_width=True):
         with st.spinner(f"Screening {len(stock_universe)} stocks... This may take a minute..."):
             results = []
             progress_bar = st.progress(0)
@@ -1361,7 +1360,7 @@ elif page == "📊 Market Screener":
             progress_bar.empty()
             
             if results:
-                st.success(f"✅ Found {len(results)} stocks matching your criteria!")
+                st.success(f" Found {len(results)} stocks matching your criteria!")
                 
                 results_df = pd.DataFrame(results)
                 
@@ -1372,7 +1371,7 @@ elif page == "📊 Market Screener":
                 
                 # AI Summary
                 st.markdown("---")
-                st.subheader("🤖 AI Screening Summary")
+                st.subheader(" AI Screening Summary")
                 
                 top_picks = results_df.head(5)['Ticker'].tolist()
                 
@@ -1398,13 +1397,13 @@ Be concise but insightful."""
                 st.markdown(ai_summary)
                 
             else:
-                st.warning("⚠️ No stocks found matching your criteria. Try adjusting the filters.")
+                st.warning(" No stocks found matching your criteria. Try adjusting the filters.")
 
 # ---------------------------
 # Page: Compare Stocks (NEW)
 # ---------------------------
-elif page == "📚 Compare Stocks":
-    st.header("📚 Side-by-Side Stock Comparison")
+elif page == " Compare Stocks":
+    st.header(" Side-by-Side Stock Comparison")
     st.markdown("Compare multiple stocks across all key metrics")
     
     col1, col2 = st.columns(2)
@@ -1422,11 +1421,11 @@ elif page == "📚 Compare Stocks":
     
     compare_period = st.selectbox("Comparison Period", ["1mo", "3mo", "6mo", "1y"], index=1)
     
-    if st.button("📊 Compare", type="primary", use_container_width=True):
+    if st.button(" Compare", type="primary", use_container_width=True):
         tickers = [t for t in [ticker1, ticker2, ticker3, ticker4] if t]
         
         if len(tickers) < 2:
-            st.error("❌ Please enter at least 2 tickers to compare")
+            st.error(" Please enter at least 2 tickers to compare")
         else:
             comparison_data = []
             price_history = {}
@@ -1469,12 +1468,12 @@ elif page == "📚 Compare Stocks":
             
             if comparison_data:
                 # Comparison table
-                st.subheader("📊 Comparison Table")
+                st.subheader(" Comparison Table")
                 comp_df = pd.DataFrame(comparison_data)
                 st.dataframe(comp_df, use_container_width=True, hide_index=True)
                 
                 # Price comparison chart
-                st.subheader("📈 Price Performance Comparison")
+                st.subheader("Price Performance Comparison")
                 
                 if price_history:
                     fig = go.Figure()
@@ -1503,7 +1502,7 @@ elif page == "📚 Compare Stocks":
                 
                 # AI Comparison
                 st.markdown("---")
-                st.subheader("🤖 AI Comparison Analysis")
+                st.subheader(" AI Comparison Analysis")
                 
                 comparison_summary = "\n".join([
                     f"**{row['Ticker']}:** Price ${row['Price']}, {compare_period} Return: {row[f'{compare_period} Return']}, "
@@ -1525,36 +1524,36 @@ Provide a comprehensive comparison including:
 
 Be specific and actionable. Consider both technical and fundamental factors."""
                 
-                with st.spinner("🤖 Generating comparison insights..."):
+                with st.spinner(" Generating comparison insights..."):
                     ai_comparison = ask_gemini(prompt)
                 
                 st.markdown(ai_comparison)
                 
-                st.info("💡 **Tip**: Use this comparison to make informed decisions based on your investment goals and risk tolerance.")
+                st.info(" **Tip**: Use this comparison to make informed decisions based on your investment goals and risk tolerance.")
 
 # ---------------------------
 # Page: Settings
 # ---------------------------
-elif page == "⚙️ Settings":
-    st.header("⚙️ Settings & Diagnostics")
+elif page == " Settings":
+    st.header(" Settings & Diagnostics")
     
     # Gemini Configuration
-    st.subheader("🤖 Gemini AI Configuration")
+    st.subheader(" Gemini AI Configuration")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.write("**Status:**")
         if GENAI_AVAILABLE:
-            st.success("✅ google-generativeai installed")
+            st.success(" google-generativeai installed")
         else:
-            st.error("❌ google-generativeai not installed")
+            st.error(" google-generativeai not installed")
             st.code("pip install google-generativeai")
         
         if GOOGLE_API_KEY:
-            st.success(f"✅ API Key configured (length: {len(GOOGLE_API_KEY)})")
+            st.success(f"API Key configured (length: {len(GOOGLE_API_KEY)})")
         else:
-            st.warning("⚠️ No API key found in secrets")
+            st.warning(" No API key found in secrets")
     
     with col2:
         st.write("**Current Model:**")
@@ -1563,11 +1562,11 @@ elif page == "⚙️ Settings":
         else:
             st.error("No model detected")
     
-    if st.button("🔍 List Available Models"):
+    if st.button(" List Available Models"):
         if not GENAI_AVAILABLE:
-            st.error("❌ google-generativeai not installed")
+            st.error(" google-generativeai not installed")
         elif not GOOGLE_API_KEY:
-            st.error("❌ API key not configured")
+            st.error(" API key not configured")
         else:
             try:
                 with st.spinner("Fetching models..."):
@@ -1576,12 +1575,12 @@ elif page == "⚙️ Settings":
                     st.write(f"Found {len(model_list)} models:")
                     st.json(model_list)
             except Exception as e:
-                st.error(f"❌ Error listing models: {e}")
+                st.error(f" Error listing models: {e}")
     
     st.markdown("---")
     
     # Database Management
-    st.subheader("💾 Database Management")
+    st.subheader("Database Management")
     
     df = list_positions_db()
     st.write(f"**Current Positions:** {len(df)}")
@@ -1590,16 +1589,16 @@ elif page == "⚙️ Settings":
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("🗑️ Clear All Positions", type="primary"):
+        if st.button(" Clear All Positions", type="primary"):
             c = conn.cursor()
             c.execute("DELETE FROM portfolio")
             conn.commit()
-            st.success("✅ Portfolio cleared successfully!")
+            st.success(" Portfolio cleared successfully!")
             time.sleep(1)
             st.rerun()
     
     with col2:
-        if st.button("📊 Show Database Stats"):
+        if st.button(" Show Database Stats"):
             c = conn.cursor()
             c.execute("SELECT COUNT(*) as count, SUM(qty) as total_qty FROM portfolio")
             stats = c.fetchone()
@@ -1609,7 +1608,7 @@ elif page == "⚙️ Settings":
     st.markdown("---")
     
     # System Information
-    st.subheader("ℹ️ System Information")
+    st.subheader("ℹ System Information")
     
     info_data = {
         "Python Packages": ["streamlit", "yfinance", "pandas", "numpy", "plotly"],
@@ -1624,25 +1623,25 @@ elif page == "⚙️ Settings":
     st.markdown("---")
     
     # API Testing
-    st.subheader("🧪 API Testing")
+    st.subheader(" API Testing")
     
     test_ticker = st.text_input("Test Ticker", "AAPL")
     
-    if st.button("🧪 Test Yahoo Finance API"):
+    if st.button(" Test Yahoo Finance API"):
         with st.spinner(f"Testing {test_ticker}..."):
             try:
                 t = yf.Ticker(test_ticker)
                 data = t.history(period="1d")
                 if data is not None and not data.empty:
-                    st.success("✅ Yahoo Finance API working")
+                    st.success(" Yahoo Finance API working")
                     st.write("Latest data:")
                     st.dataframe(data.tail(1))
                 else:
-                    st.error("❌ No data returned")
+                    st.error(" No data returned")
             except Exception as e:
-                st.error(f"❌ API Error: {e}")
+                st.error(f" API Error: {e}")
     
-    if st.button("🧪 Test Gemini API"):
+    if st.button(" Test Gemini API"):
         with st.spinner("Testing Gemini..."):
             response = ask_gemini("Respond with 'API working' if you receive this.")
             st.write("**Response:**")
@@ -1655,7 +1654,7 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
     <p><strong>AI Investment Buddy</strong> — Built by Suhas</p>
-    <p>🗄️ Local SQLite persistence enabled | 🤖 Powered by Gemini AI</p>
-    <p style='font-size: 0.8em;'>⚠️ For educational purposes only. Not financial advice.</p>
+    <p> Local SQLite persistence enabled </p>
+    <p style='font-size: 0.8em;'> For educational purposes only. Not financial advice.</p>
 </div>
 """, unsafe_allow_html=True)
