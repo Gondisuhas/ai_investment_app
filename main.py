@@ -1106,7 +1106,7 @@ elif page == " AI Research Assistant":
         st.session_state.research_query = ""
     
     query = st.text_area(
-        "🔍 Ask your investment question:",
+        " Ask your investment question:",
         value=st.session_state.research_query,
         height=100,
         placeholder="Examples:\n- Which stocks will rise high this month and why?\n- Compare AAPL vs MSFT for long-term investment\n- What are the best Indian stocks in the EV sector?\n- Should I buy Tesla now? Analyze risks and opportunities"
@@ -1116,7 +1116,7 @@ elif page == " AI Research Assistant":
     col1, col2 = st.columns([2, 1])
     with col1:
         tickers_to_analyze = st.text_input(
-            "📊 Specific tickers to analyze (optional, comma-separated)",
+            " Specific tickers to analyze (optional, comma-separated)",
             placeholder="e.g., AAPL,MSFT,GOOGL or INFY.NS,TCS.NS",
             help="Leave empty for general analysis"
         )
