@@ -362,6 +362,18 @@ def calculate_risk_score(df):
             return 50, "Insufficient data", {}
         
         risk_components = {}
+        """
+    Calculate a quantitative risk score (0-100) based on technical indicators
+    Higher score = Higher risk
+    
+    Factors:
+    - Volatility (30%): Higher volatility = higher risk
+    - RSI extremes (20%): Overbought/oversold = higher risk
+    - Price momentum (20%): Declining trend = higher risk
+    - MACD divergence (15%): Weak momentum = higher risk
+    - Volume trend (15%): Declining volume = higher risk
+    """
+
         
         # 1. Volatility Risk (30 points)
         returns = df['Close'].pct_change().dropna()
@@ -481,7 +493,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("📊 Professional Investment Platform")
+    st.title("Quantscope")
     st.markdown("### Secure Login")
     
     col1, col2, col3 = st.columns([1, 2, 1])
