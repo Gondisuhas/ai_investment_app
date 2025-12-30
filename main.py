@@ -752,7 +752,50 @@ elif page == "News & Sentiment":
                 raw_news = getattr(t, "news", []) or []
                 
                 if not raw_news:
-                    st.warning("No news available from yfinance")
+                    st.warning("⚠️ Yahoo Finance did not return news for this ticker.")
+                    st.info("""
+                    **Why this happens:**
+                    - Yahoo Finance news API is unreliable and often doesn't return data
+                    - News availability varies by ticker and region
+                    - Some tickers have limited news coverage
+                    
+                    **Try these alternatives:**
+                    - Use popular tickers like: AAPL, MSFT, GOOGL, TSLA, AMZN
+                    - For Indian stocks: RELIANCE.NS, TCS.NS, INFY.NS
+                    - Check financial news websites directly
+                    - Use the Stock Analyzer for technical analysis instead
+                    """)
+                    
+                    # Provide sample sentiment analysis
+                    st.markdown("---")
+                    st.subheader("📊 Demo: Sentiment Analysis Capability")
+                    st.write("Here's how sentiment analysis works with sample headlines:")
+                    
+                    sample_headlines = [
+                        f"{nt} reports record quarterly earnings beating analyst expectations",
+                        f"{nt} announces strategic partnership with major tech company",
+                        f"Analysts remain bullish on {nt} stock prospects",
+                        f"{nt} faces regulatory scrutiny in European markets",
+                        f"Mixed signals for {nt} as market volatility increases"
+                    ]
+                    
+                    sample_results = analyze_news_sentiment(sample_headlines)
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Sample Sentiment", sample_results['overall_sentiment'])
+                    col2.metric("Positive", sample_results['positive_count'])
+                    col3.metric("Negative", sample_results['negative_count'])
+                    col4.metric("Neutral", sample_results['neutral_count'])
+                    
+                    st.write("**Sample Headlines with Sentiment:**")
+                    for headline in sample_headlines:
+                        polarity, label, confidence = analyze_sentiment_local(headline)
+                        if label == "Positive":
+                            st.success(f"🟢 {headline} - **{label}** ({polarity:.2f})")
+                        elif label == "Negative":
+                            st.error(f"🔴 {headline} - **{label}** ({polarity:.2f})")
+                        else:
+                            st.info(f"🟡 {headline} - **{label}** ({polarity:.2f})")
                 else:
                     headlines = []
                     for item in raw_news[:ncount]:

@@ -1,0 +1,2093 @@
+[1mdiff --git a/.gitignore/.env b/.gitignore/.env[m
+[1mindex e09d0cea..1e706e7b 100644[m
+[1m--- a/.gitignore/.env[m
+[1m+++ b/.gitignore/.env[m
+[36m@@ -1 +1 @@[m
+[31m-GOOGLE_API_KEY=AIzaSyC9bACUlzoAlcOruc1h2sTpxZeL4j1_o_g[m
+\ No newline at end of file[m
+[32m+[m[32mGOOGLE_API_KEY=AIzaSyDg8u5QrPwEUjxaPSTKu5Xyq5jb-A8cJqA[m
+\ No newline at end of file[m
+[1mdiff --git a/main.py b/main.py[m
+[1mindex 1774e41e..79db711b 100644[m
+[1m--- a/main.py[m
+[1m+++ b/main.py[m
+[36m@@ -7,22 +7,27 @@[m [mimport pandas as pd[m
+ import numpy as np[m
+ import plotly.graph_objects as go[m
+ from datetime import datetime, timedelta[m
+[31m-import re[m
+[31m-from collections import Counter[m
+ [m
+[31m-# ---------------------------[m
+[31m-# Natural Language Processing Setup[m
+[31m-# ---------------------------[m
+[32m+[m[32m# Optional: Gemini[m
+ try:[m
+[31m-    from textblob import TextBlob[m
+[31m-    TEXTBLOB_AVAILABLE = True[m
+[31m-except ImportError:[m
+[31m-    TEXTBLOB_AVAILABLE = False[m
+[31m-    st.warning("TextBlob not installed. Install with: pip install textblob")[m
+[32m+[m[32m    import google.generativeai as genai[m
+[32m+[m[32m    GENAI_AVAILABLE = True[m
+[32m+[m[32mexcept Exception:[m
+[32m+[m[32m    genai = None[m
+[32m+[m[32m    GENAI_AVAILABLE = False[m
+ [m
+ # ---------------------------[m
+ # Configuration & Secrets[m
+ # ---------------------------[m
+[32m+[m[32m# Safely access secrets with fallback[m
+[32m+[m[32mtry:[m
+[32m+[m[32m    if "GOOGLE_API_KEY" in st.secrets:[m
+[32m+[m[32m        GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"][m
+[32m+[m[32m    else:[m
+[32m+[m[32m        GOOGLE_API_KEY = ""[m
+[32m+[m[32mexcept (KeyError, FileNotFoundError, Exception):[m
+[32m+[m[32m    GOOGLE_API_KEY = ""[m
+[32m+[m
+ try:[m
+     if "APP_PASSWORD" in st.secrets:[m
+         APP_PASSWORD = st.secrets["APP_PASSWORD"][m
+[36m@@ -31,199 +36,52 @@[m [mtry:[m
+ except (KeyError, FileNotFoundError, Exception):[m
+     APP_PASSWORD = "password123"[m
+ [m
+[31m-# ---------------------------[m
+[31m-# Local Sentiment Analysis[m
+[31m-# ---------------------------[m
+[31m-def analyze_sentiment_local(text):[m
+[31m-    """[m
+[31m-    Perform sentiment analysis using TextBlob (no API needed)[m
+[31m-    Returns: sentiment score (-1 to 1), polarity label, and confidence[m
+[31m-    """[m
+[31m-    if not TEXTBLOB_AVAILABLE or not text:[m
+[31m-        return 0.0, "Neutral", 0.5[m
+[31m-    [m
+[32m+[m[32m# Configure Gemini if available[m
+[32m+[m[32mif GENAI_AVAILABLE and GOOGLE_API_KEY:[m
+     try:[m
+[31m-        blob = TextBlob(str(text))[m
+[31m-        polarity = blob.sentiment.polarity[m
+[31m-        subjectivity = blob.sentiment.subjectivity[m
+[31m-        [m
+[31m-        # Classify sentiment[m
+[31m-        if polarity > 0.1:[m
+[31m-            label = "Positive"[m
+[31m-        elif polarity < -0.1:[m
+[31m-            label = "Negative"[m
+[31m-        else:[m
+[31m-            label = "Neutral"[m
+[31m-        [m
+[31m-        # Confidence based on subjectivity (inverse relationship)[m
+[31m-        confidence = 1 - subjectivity[m
+[31m-        [m
+[31m-        return polarity, label, confidence[m
+[32m+[m[32m        genai.configure(api_key=GOOGLE_API_KEY)[m
+     except Exception as e:[m
+[31m-        return 0.0, "Neutral", 0.5[m
+[31m-[m
+[31m-def analyze_news_sentiment(headlines):[m
+[31m-    """[m
+[31m-    Analyze sentiment from multiple news headlines[m
+[31m-    Returns aggregate sentiment analysis[m
+[31m-    """[m
+[31m-    if not headlines:[m
+[31m-        return {[m
+[31m-            "overall_sentiment": "Neutral",[m
+[31m-            "sentiment_score": 0.0,[m
+[31m-            "positive_count": 0,[m
+[31m-            "negative_count": 0,[m
+[31m-            "neutral_count": 0,[m
+[31m-            "confidence": 0.0[m
+[31m-        }[m
+[31m-    [m
+[31m-    sentiments = [][m
+[31m-    labels_count = {"Positive": 0, "Negative": 0, "Neutral": 0}[m
+[31m-    [m
+[31m-    for headline in headlines:[m
+[31m-        polarity, label, confidence = analyze_sentiment_local(headline)[m
+[31m-        sentiments.append(polarity)[m
+[31m-        labels_count[label] += 1[m
+[31m-    [m
+[31m-    avg_sentiment = np.mean(sentiments) if sentiments else 0.0[m
+[31m-    [m
+[31m-    # Determine overall sentiment[m
+[31m-    if avg_sentiment > 0.15:[m
+[31m-        overall = "Bullish"[m
+[31m-    elif avg_sentiment < -0.15:[m
+[31m-        overall = "Bearish"[m
+[31m-    else:[m
+[31m-        overall = "Neutral"[m
+[31m-    [m
+[31m-    return {[m
+[31m-        "overall_sentiment": overall,[m
+[31m-        "sentiment_score": avg_sentiment,[m
+[31m-        "positive_count": labels_count["Positive"],[m
+[31m-        "negative_count": labels_count["Negative"],[m
+[31m-        "neutral_count": labels_count["Neutral"],[m
+[31m-        "confidence": abs(avg_sentiment)[m
+[31m-    }[m
+[32m+[m[32m        st.sidebar.warning(f"Gemini configuration failed: {e}")[m
+[32m+[m[32m        GENAI_AVAILABLE = False[m
+ [m
+[31m-# ---------------------------[m
+[31m-# Local AI Analysis (Rule-Based)[m
+[31m-# ---------------------------[m
+[31m-def generate_local_analysis(ticker, data, analysis_type="stock"):[m
+[31m-    """[m
+[31m-    Generate analysis using rule-based logic (no API needed)[m
+[31m-    """[m
+[32m+[m[32mdef pick_gemini_model():[m
+[32m+[m[32m    """Select the best available Gemini model"""[m
+[32m+[m[32m    if not GENAI_AVAILABLE or not GOOGLE_API_KEY:[m
+[32m+[m[32m        return None[m
+     try:[m
+[31m-        current_price = data['Close'].iloc[-1][m
+[31m-        rsi = data['RSI'].iloc[-1][m
+[31m-        ema20 = data['EMA20'].iloc[-1][m
+[31m-        ema50 = data['EMA50'].iloc[-1][m
+[31m-        macd = data['MACD'].iloc[-1][m
+[31m-        signal = data['Signal'].iloc[-1][m
+[32m+[m[32m        models = genai.list_models()[m
+[32m+[m[32m        # Priority order of models to try[m
+[32m+[m[32m        preferred_models = [[m
+[32m+[m[32m            "gemini-2.5-flash",[m
+[32m+[m[32m            "gemini-2.5-pro",[m
+[32m+[m[32m            "gemini-2.0-flash",[m
+[32m+[m[32m            "gemini-flash-latest",[m
+[32m+[m[32m            "gemini-pro-latest"[m
+[32m+[m[32m        ][m
+         [m
+[31m-        # Price momentum[m
+[31m-        price_change_30d = ((current_price - data['Close'].iloc[-30]) / data['Close'].iloc[-30]) * 100[m
+[32m+[m[32m        available_models = [][m
+[32m+[m[32m        for m in models:[m
+[32m+[m[32m            name = getattr(m, "name", "")[m
+[32m+[m[32m            supported = getattr(m, "supported_generation_methods", []) or [][m
+[32m+[m[32m            if "generateContent" in supported:[m
+[32m+[m[32m                # Remove 'models/' prefix[m
+[32m+[m[32m                clean_name = name.replace("models/", "")[m
+[32m+[m[32m                available_models.append(clean_name)[m
+         [m
+[31m-        analysis = f"""[m
+[31m-## Technical Analysis for {ticker}[m
+[31m-[m
+[31m-### Current Market Position[m
+[31m-- **Price**: ${current_price:.2f}[m
+[31m-- **30-Day Change**: {price_change_30d:+.2f}%[m
+[31m-[m
+[31m-### Technical Indicators[m
+[31m-- **RSI (14)**: {rsi:.2f}[m
+[31m-  - {' Overbought territory - potential sell signal' if rsi > 70 else ' Oversold territory - potential buy opportunity' if rsi < 30 else 'Neutral range'}[m
+[31m-  [m
+[31m-- **Moving Averages**:[m
+[31m-  - EMA(20): ${ema20:.2f}[m
+[31m-  - EMA(50): ${ema50:.2f}[m
+[31m-  - Status: {'Bullish crossover' if ema20 > ema50 else 'Bearish crossover'}[m
+[31m-[m
+[31m-- **MACD**: {macd:.4f}[m
+[31m-  - Signal Line: {signal:.4f}[m
+[31m-  - Momentum: {'Positive' if macd > signal else 'Negative'}[m
+[31m-[m
+[31m-### Trading Signal[m
+[31m-"""[m
+[32m+[m[32m        # Try to find preferred model[m
+[32m+[m[32m        for pref in preferred_models:[m
+[32m+[m[32m            if pref in available_models:[m
+[32m+[m[32m                return pref[m
+         [m
+[31m-        # Generate signal[m
+[31m-        if ema20 > ema50 and rsi < 70 and macd > signal:[m
+[31m-            analysis += "**BUY Signal** - Multiple bullish indicators align\n"[m
+[31m-            analysis += "- Uptrend confirmed by moving averages\n"[m
+[31m-            analysis += "- MACD shows positive momentum\n"[m
+[31m-            analysis += "- RSI not yet overbought\n"[m
+[31m-        elif ema20 < ema50 and rsi > 30 and macd < signal:[m
+[31m-            analysis += "**SELL Signal** - Bearish trend developing\n"[m
+[31m-            analysis += "- Downtrend confirmed by moving averages\n"[m
+[31m-            analysis += "- MACD shows negative momentum\n"[m
+[31m-            analysis += "- Consider taking profits or setting stop losses\n"[m
+[31m-        else:[m
+[31m-            analysis += "**HOLD Signal** - Mixed signals, wait for clearer trend\n"[m
+[31m-            analysis += "- Consolidation phase\n"[m
+[31m-            analysis += "- Monitor for breakout signals\n"[m
+[31m-        [m
+[31m-        # Risk assessment[m
+[31m-        volatility = data['Close'].pct_change().std() * np.sqrt(252)[m
+[31m-        analysis += f"\n### Risk Assessment\n"[m
+[31m-        analysis += f"- **Volatility**: {volatility*100:.2f}%\n"[m
+[31m-        [m
+[31m-        if volatility > 0.4:[m
+[31m-            analysis += "- High volatility - suitable for risk-tolerant traders\n"[m
+[31m-        elif volatility > 0.25:[m
+[31m-            analysis += "- Moderate volatility - balanced risk profile\n"[m
+[31m-        else:[m
+[31m-            analysis += "- Low volatility - conservative investment\n"[m
+[31m-        [m
+[31m-        analysis += "\n### Key Levels to Watch\n"[m
+[31m-        recent_high = data['High'].tail(30).max()[m
+[31m-        recent_low = data['Low'].tail(30).min()[m
+[31m-        analysis += f"- **Resistance**: ${recent_high:.2f}\n"[m
+[31m-        analysis += f"- **Support**: ${recent_low:.2f}\n"[m
+[31m-        [m
+[31m-        analysis += "\n---\n*Analysis generated using technical indicators and historical data*"[m
+[32m+[m[32m        # Fallback: return first available model that supports generateContent[m
+[32m+[m[32m        if available_models:[m
+[32m+[m[32m            return available_models[0][m
+         [m
+[31m-        return analysis[m
+[31m-        [m
+[31m-    except Exception as e:[m
+[31m-        return f"Error generating analysis: {str(e)}"[m
+[32m+[m[32m        return "gemini-2.5-flash"[m
+[32m+[m[32m    except Exception:[m
+[32m+[m[32m        return "gemini-2.5-flash"[m
+ [m
+[31m-def generate_comparison_analysis(comparison_data):[m
+[31m-    """Generate comparison analysis without API"""[m
+[31m-    if not comparison_data:[m
+[31m-        return "No data available for comparison"[m
+[31m-    [m
+[31m-    analysis = "## Stock Comparison Analysis\n\n"[m
+[31m-    [m
+[31m-    # Find best performer[m
+[31m-    best_return = max(comparison_data, key=lambda x: float(x.get('Return', '0%').replace('%', '').replace('+', '')))[m
+[31m-    lowest_risk = min(comparison_data, key=lambda x: int(x.get('Risk Score', '50/100').split('/')[0]))[m
+[31m-    [m
+[31m-    analysis += f"### Performance Leaders\n"[m
+[31m-    analysis += f"- **Best Return**: {best_return['Ticker']}\n"[m
+[31m-    analysis += f"- **Lowest Risk**: {lowest_risk['Ticker']}\n\n"[m
+[31m-    [m
+[31m-    analysis += "### Individual Analysis\n\n"[m
+[31m-    [m
+[31m-    for stock in comparison_data:[m
+[31m-        ticker = stock['Ticker'][m
+[31m-        signal = stock['Signal'][m
+[31m-        risk = stock['Risk Score'][m
+[31m-        [m
+[31m-        analysis += f"**{ticker}**\n"[m
+[31m-        analysis += f"- Signal: {signal}\n"[m
+[31m-        analysis += f"- Risk Level: {risk}\n"[m
+[31m-        [m
+[31m-        if signal == "BUY" and int(risk.split('/')[0]) < 50:[m
+[31m-            analysis += f"- Recommendation: Strong Buy candidate with favorable risk/reward\n"[m
+[31m-        elif signal == "SELL":[m
+[31m-            analysis += f"- Recommendation: Consider reducing exposure\n"[m
+[31m-        else:[m
+[31m-            analysis += f"- Recommendation: Hold and monitor\n"[m
+[31m-        [m
+[31m-        analysis += "\n"[m
+[31m-    [m
+[31m-    analysis += "---\n*Comparison based on technical analysis and risk metrics*"[m
+[31m-    [m
+[31m-    return analysis[m
+[32m+[m[32mMODEL_NAME = pick_gemini_model()[m
+ [m
+ # ---------------------------[m
+ # Database (SQLite) for portfolio persistence[m
+[36m@@ -326,43 +184,54 @@[m [mdef generate_signal(df):[m
+         return "N/A"[m
+ [m
+ def calculate_risk_score(df):[m
+[31m-    """Calculate quantitative risk score (0-100)"""[m
+[32m+[m[32m    """[m
+[32m+[m[32m    Calculate a quantitative risk score (0-100) based on technical indicators[m
+[32m+[m[32m    Higher score = Higher risk[m
+[32m+[m[41m    [m
+[32m+[m[32m    Factors:[m
+[32m+[m[32m    - Volatility (30%): Higher volatility = higher risk[m
+[32m+[m[32m    - RSI extremes (20%): Overbought/oversold = higher risk[m
+[32m+[m[32m    - Price momentum (20%): Declining trend = higher risk[m
+[32m+[m[32m    - MACD divergence (15%): Weak momentum = higher risk[m
+[32m+[m[32m    - Volume trend (15%): Declining volume = higher risk[m
+[32m+[m[32m    """[m
+     try:[m
+         if df is None or df.empty or len(df) < 30:[m
+[31m-            return 50, "Insufficient data", {}[m
+[32m+[m[32m            return 50, "Insufficient data"[m
+         [m
+         risk_components = {}[m
+         [m
+         # 1. Volatility Risk (30 points)[m
+         returns = df['Close'].pct_change().dropna()[m
+[31m-        volatility = returns.std() * np.sqrt(252)[m
+[31m-        vol_risk = min(volatility * 100, 30)[m
+[32m+[m[32m        volatility = returns.std() * np.sqrt(252)  # Annualized volatility[m
+[32m+[m[32m        vol_risk = min(volatility * 100, 30)  # Cap at 30[m
+         risk_components['Volatility'] = round(vol_risk, 1)[m
+         [m
+         # 2. RSI Risk (20 points)[m
+         current_rsi = df['RSI'].iloc[-1][m
+         if pd.isna(current_rsi):[m
+             rsi_risk = 10[m
+[31m-        elif current_rsi > 70:[m
+[32m+[m[32m        elif current_rsi > 70:  # Overbought[m
+             rsi_risk = 20 * (current_rsi - 70) / 30[m
+[31m-        elif current_rsi < 30:[m
+[32m+[m[32m        elif current_rsi < 30:  # Oversold[m
+             rsi_risk = 20 * (30 - current_rsi) / 30[m
+[31m-        else:[m
+[32m+[m[32m        else:  # Neutral zone[m
+             rsi_risk = 5[m
+         risk_components['RSI'] = round(rsi_risk, 1)[m
+         [m
+         # 3. Price Momentum Risk (20 points)[m
+[32m+[m[32m        # Compare recent prices to 30-day average[m
+         recent_avg = df['Close'].tail(5).mean()[m
+         month_avg = df['Close'].tail(30).mean()[m
+         momentum_change = (recent_avg - month_avg) / month_avg[m
+         [m
+[31m-        if momentum_change < -0.05:[m
+[32m+[m[32m        if momentum_change < -0.05:  # Declining > 5%[m
+             momentum_risk = 20[m
+[31m-        elif momentum_change < 0:[m
+[32m+[m[32m        elif momentum_change < 0:  # Slightly declining[m
+             momentum_risk = 10[m
+[31m-        elif momentum_change > 0.05:[m
+[32m+[m[32m        elif momentum_change > 0.05:  # Rising > 5%[m
+             momentum_risk = 5[m
+[31m-        else:[m
+[32m+[m[32m        else:  # Slightly rising[m
+             momentum_risk = 8[m
+         risk_components['Momentum'] = round(momentum_risk, 1)[m
+         [m
+[36m@@ -374,11 +243,11 @@[m [mdef calculate_risk_score(df):[m
+             macd_risk = 7.5[m
+         else:[m
+             macd_diff = current_macd - current_signal[m
+[31m-            if macd_diff < 0:[m
+[32m+[m[32m            if macd_diff < 0:  # Bearish[m
+                 macd_risk = 15[m
+[31m-            elif abs(macd_diff) < 0.5:[m
+[32m+[m[32m            elif abs(macd_diff) < 0.5:  # Weak signal[m
+                 macd_risk = 10[m
+[31m-            else:[m
+[32m+[m[32m            else:  # Bullish[m
+                 macd_risk = 5[m
+         risk_components['MACD'] = round(macd_risk, 1)[m
+         [m
+[36m@@ -389,7 +258,7 @@[m [mdef calculate_risk_score(df):[m
+             [m
+             if avg_vol > 0:[m
+                 vol_ratio = recent_vol / avg_vol[m
+[31m-                if vol_ratio < 0.7:[m
+[32m+[m[32m                if vol_ratio < 0.7:  # Low volume[m
+                     volume_risk = 15[m
+                 elif vol_ratio < 0.9:[m
+                     volume_risk = 10[m
+[36m@@ -401,27 +270,77 @@[m [mdef calculate_risk_score(df):[m
+             volume_risk = 7.5[m
+         risk_components['Volume'] = round(volume_risk, 1)[m
+         [m
+[32m+[m[32m        # Total Risk Score[m
+         total_risk = sum(risk_components.values())[m
+         [m
+[32m+[m[32m        # Risk Level Classification[m
+         if total_risk < 30:[m
+[31m-            risk_level = "Low Risk"[m
+[32m+[m[32m            risk_level = "Low Risk 🟢"[m
+         elif total_risk < 50:[m
+[31m-            risk_level = "Moderate Risk"[m
+[32m+[m[32m            risk_level = "Moderate Risk 🟡"[m
+         elif total_risk < 70:[m
+[31m-            risk_level = "High Risk"[m
+[32m+[m[32m            risk_level = "High Risk 🟠"[m
+         else:[m
+[31m-            risk_level = "Very High Risk"[m
+[32m+[m[32m            risk_level = "Very High Risk 🔴"[m
+         [m
+         return round(total_risk, 1), risk_level, risk_components[m
+         [m
+     except Exception as e:[m
+         return 50, "Calculation Error", {"Error": str(e)}[m
+[32m+[m[32m    """Generate trading signal based on EMA crossover"""[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        if len(df) < 2:[m
+[32m+[m[32m            return "N/A"[m
+[32m+[m[32m        if df["EMA20"].iloc[-1] > df["EMA50"].iloc[-1]:[m
+[32m+[m[32m            return "BUY"[m
+[32m+[m[32m        elif df["EMA20"].iloc[-1] < df["EMA50"].iloc[-1]:[m
+[32m+[m[32m            return "SELL"[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            return "HOLD"[m
+[32m+[m[32m    except Exception:[m
+[32m+[m[32m        return "N/A"[m
+[32m+[m
+[32m+[m[32mdef ask_gemini(prompt):[m
+[32m+[m[32m    """Query Gemini API"""[m
+[32m+[m[32m    if not GENAI_AVAILABLE:[m
+[32m+[m[32m        return "⚠️ Gemini AI is not available. Install google-generativeai package."[m
+[32m+[m[32m    if not GOOGLE_API_KEY:[m
+[32m+[m[32m        return "⚠️ Gemini not configured. Add GOOGLE_API_KEY to Streamlit secrets to enable AI features."[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        # Try different model names if the current one fails[m
+[32m+[m[32m        model_names = [[m
+[32m+[m[32m            MODEL_NAME,[m
+[32m+[m[32m            "gemini-2.5-flash",[m
+[32m+[m[32m            "gemini-2.5-pro",[m
+[32m+[m[32m            "gemini-2.0-flash",[m
+[32m+[m[32m            "gemini-flash-latest",[m
+[32m+[m[32m            "gemini-pro-latest"[m
+[32m+[m[32m        ][m
+[32m+[m[41m        [m
+[32m+[m[32m        for model_name in model_names:[m
+[32m+[m[32m            if not model_name:[m
+[32m+[m[32m                continue[m
+[32m+[m[32m            try:[m
+[32m+[m[32m                model = genai.GenerativeModel(model_name)[m
+[32m+[m[32m                resp = model.generate_content(prompt)[m
+[32m+[m[32m                return getattr(resp, "text", str(resp))[m
+[32m+[m[32m            except Exception as e:[m
+[32m+[m[32m                error_str = str(e)[m
+[32m+[m[32m                # If 404 or model not found, try next model[m
+[32m+[m[32m                if ("404" in error_str or "not found" in error_str.lower()) and model_name != model_names[-1]:[m
+[32m+[m[32m                    continue[m
+[32m+[m[32m                else:[m
+[32m+[m[32m                    raise e[m
+[32m+[m[41m        [m
+[32m+[m[32m        return "❌ Could not find a working Gemini model. Please check the Settings page."[m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        return f"❌ Gemini error: {e}"[m
+ [m
+ # ---------------------------[m
+ # Page Configuration[m
+ # ---------------------------[m
+ st.set_page_config([m
+[31m-    page_title="Professional Investment Platform",[m
+[32m+[m[32m    page_title="AI Investment Buddy",[m
+     layout="wide",[m
+     page_icon="📊",[m
+     initial_sidebar_state="expanded"[m
+[36m@@ -451,49 +370,62 @@[m [mif "authenticated" not in st.session_state:[m
+     st.session_state.authenticated = False[m
+ [m
+ if not st.session_state.authenticated:[m
+[31m-    st.title("📊 Professional Investment Platform")[m
+[31m-    st.markdown("### Secure Login")[m
+[32m+[m[32m    st.title("🔐 AI Investment Buddy")[m
+[32m+[m[32m    st.markdown("### Welcome, Buddy")[m
+     [m
+     col1, col2, col3 = st.columns([1, 2, 1])[m
+     with col2:[m
+[31m-        pw = st.text_input("Enter password", type="password", key="login_password")[m
+[31m-        if st.button("Login", use_container_width=True):[m
+[32m+[m[32m        pw = st.text_input("Enter app password", type="password", key="login_password")[m
+[32m+[m[32m        if st.button("🚀 Login", use_container_width=True):[m
+             if pw == APP_PASSWORD:[m
+                 st.session_state.authenticated = True[m
+[31m-                st.success("Login successful")[m
+[32m+[m[32m                st.success("✅ Login successful!")[m
+                 time.sleep(0.5)[m
+                 st.rerun()[m
+             else:[m
+[31m-                st.error("Incorrect password")[m
+[32m+[m[32m                st.error("❌ Incorrect password. Please try again.")[m
+     st.stop()[m
+ [m
+ # ---------------------------[m
+ # Main Application[m
+ # ---------------------------[m
+[31m-st.markdown('<p class="main-header">📊 Professional Investment Platform</p>', unsafe_allow_html=True)[m
+[31m-st.markdown("**Advanced Technical Analysis Dashboard**")[m
+[32m+[m[32mst.markdown('<p class="main-header">📊 AI Investment Buddy</p>', unsafe_allow_html=True)[m
+[32m+[m[32mst.markdown("**Dashboard**")[m
+ [m
+ # Sidebar Navigation[m
+ with st.sidebar:[m
+[31m-    st.markdown("### Navigation")[m
+[31m-    pages = ["Home", "Real-Time Monitor", "Stock Analyzer", "Cryptocurrency", [m
+[31m-             "Portfolio Manager", "News & Sentiment", "Predictions", [m
+[31m-             "Research Assistant", "Market Screener", [m
+[31m-             "Compare Stocks", "Settings"][m
+[32m+[m[32m    st.image("https://img.icons8.com/fluency/96/000000/rocket.png", width=80)[m
+[32m+[m[32m    st.markdown("### 🧭 Navigation")[m
+[32m+[m[32m    pages = ["🏠 Home", "⚡ Real-Time", "📈 Stock Analyzer", "₿ Crypto",[m[41m [m
+[32m+[m[32m             "💼 Portfolio", "📰 News & Sentiment", "🔮 Predictions",[m[41m [m
+[32m+[m[32m             "🤖 AI Research Assistant", "📊 Market Screener",[m[41m [m
+[32m+[m[32m             "📚 Compare Stocks", "⚙️ Settings"][m
+     page = st.selectbox("Select Page", pages, label_visibility="collapsed")[m
+     [m
+     st.markdown("---")[m
+[31m-    st.markdown("### Controls")[m
+[32m+[m[32m    st.markdown("### ⚡ Controls")[m
+     refresh_auto = st.slider("Auto-refresh (sec)", 0, 60, 0, help="0 = disabled")[m
+     [m
+     st.markdown("---")[m
+[31m-    st.markdown("### System Status")[m
+[31m-    st.success("✓ Local Analysis Active")[m
+[31m-    st.success("✓ Sentiment Analysis Ready" if TEXTBLOB_AVAILABLE else "⚠ Install TextBlob")[m
+[31m-    st.info("No API Keys Required")[m
+[32m+[m[32m    st.markdown("### 🤖 AI Status")[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Debug info for secrets[m
+[32m+[m[32m    if GOOGLE_API_KEY:[m
+[32m+[m[32m        st.success(f"✅ API Key: {GOOGLE_API_KEY[:8]}...{GOOGLE_API_KEY[-4:]}")[m
+[32m+[m[32m    else:[m
+[32m+[m[32m        st.error("❌ No API key found")[m
+[32m+[m[41m    [m
+[32m+[m[32m    if GENAI_AVAILABLE and GOOGLE_API_KEY and MODEL_NAME:[m
+[32m+[m[32m        st.success(f"✅ Model: `{MODEL_NAME}`")[m
+[32m+[m[32m    elif GENAI_AVAILABLE and GOOGLE_API_KEY:[m
+[32m+[m[32m        st.warning("⚠️ API key present but model not detected")[m
+[32m+[m[32m    elif GENAI_AVAILABLE:[m
+[32m+[m[32m        st.warning("⚠️ API key missing")[m
+[32m+[m[32m    else:[m
+[32m+[m[32m        st.error("❌ Gemini library not installed")[m
+     [m
+     st.markdown("---")[m
+[31m-    if st.button("Logout", use_container_width=True):[m
+[32m+[m[32m    if st.button("🚪 Logout", use_container_width=True):[m
+         st.session_state.authenticated = False[m
+         st.rerun()[m
+ [m
+[36m@@ -504,79 +436,72 @@[m [mif "last_refresh" not in st.session_state:[m
+ # ---------------------------[m
+ # Page: Home[m
+ # ---------------------------[m
+[31m-if page == "Home":[m
+[31m-    st.header("Welcome to Professional Investment Platform")[m
+[32m+[m[32mif page == "🏠 Home":[m
+[32m+[m[32m    st.header("🏠 Welcome, Buddy")[m
+     [m
+     col1, col2 = st.columns(2)[m
+     [m
+     with col1:[m
+         st.markdown("""[m
+[31m-        ### Quick Start Guide[m
+[32m+[m[32m        ### 🎯 Quick Start Guide[m
+         [m
+         **Navigation:**[m
+[31m-        - **Real-Time Monitor**: Live multi-ticker tracking with charts[m
+[31m-        - **Stock Analyzer**: Deep technical analysis[m
+[31m-        - **Cryptocurrency**: Crypto market analysis[m
+[31m-        - **Portfolio Manager**: Track your investments[m
+[31m-        - **News & Sentiment**: AI-powered sentiment analysis[m
+[31m-        - **Predictions**: Technical forecasting[m
+[31m-        - **Research Assistant**: Investment research tools[m
+[31m-        - **Market Screener**: Find stocks by criteria[m
+[31m-        - **Compare Stocks**: Side-by-side analysis[m
+[31m-        - **Settings**: System configuration[m
+[32m+[m[32m        - **⚡ Real-Time**: Live multi-ticker tracking with 1-minute charts[m
+[32m+[m[32m        - **📈 Stock Analyzer**: Deep dive into stocks with AI analysis[m
+[32m+[m[32m        - **₿ Crypto**: Cryptocurrency analysis and sentiment[m
+[32m+[m[32m        - **💼 Portfolio**: Manage your positions (persistent storage)[m
+[32m+[m[32m        - **📰 News & Sentiment**: Latest headlines with AI insights[m
+[32m+[m[32m        - **🔮 Predictions**: AI-powered price forecasts[m
+[32m+[m[32m        - **⚙️ Settings**: Diagnostics and configuration[m
+         """)[m
+     [m
+     with col2:[m
+         st.markdown("""[m
+[31m-        ### Platform Features[m
+[31m-        [m
+[31m-        - **No API Keys Required**: All analysis runs locally[m
+[31m-        - **Real-Time Data**: Live market data via yfinance[m
+[31m-        - **Sentiment Analysis**: Natural language processing[m
+[31m-        - **Technical Indicators**: RSI, MACD, EMA, and more[m
+[31m-        - **Risk Assessment**: Quantitative risk scoring[m
+[31m-        - **Portfolio Tracking**: Persistent local database[m
+[31m-        - **Professional Grade**: Rule-based analysis engine[m
+[32m+[m[32m        ### 💡 Pro Tips[m
+         [m
+[31m-        ### Supported Markets[m
+[31m-        - 🇺🇸 US Stocks (e.g., AAPL, MSFT)[m
+[31m-        - 🇮🇳 Indian Stocks (e.g., TCS.NS, INFY.NS)[m
+[31m-        - 💰 Cryptocurrencies (e.g., BTC-USD, ETH-USD)[m
+[32m+[m[32m        - **Indian Stocks**: Use `.NS` suffix (e.g., `TCS.NS`, `INFY.NS`)[m
+[32m+[m[32m        - **US Stocks**: Direct ticker (e.g., `AAPL`, `MSFT`)[m
+[32m+[m[32m        - **Crypto**: Use format `BTC-USD`, `ETH-USD`[m
+[32m+[m[32m        - **Portfolio**: Data persists in SQLite database[m
+[32m+[m[32m        - **AI Features**: Requires Gemini API key in secrets[m
+         """)[m
+     [m
+[31m-    st.info("**Note**: All data is processed locally. Your portfolio is stored in a local SQLite database.")[m
+[32m+[m[32m    st.info("📌 **Note**: Your portfolio is stored locally in `portfolio.db` and persists between sessions.")[m
+ [m
+ # ---------------------------[m
+ # Page: Real-Time[m
+ # ---------------------------[m
+[31m-elif page == "Real-Time Monitor":[m
+[31m-    st.header("Real-Time Multi-Ticker Monitor")[m
+[32m+[m[32melif page == "⚡ Real-Time":[m
+[32m+[m[32m    st.header("⚡ Real-Time Multi-Ticker Tracker")[m
+     [m
+     col1, col2 = st.columns([3, 1])[m
+     with col1:[m
+[31m-        tickers_raw = st.text_input("Enter tickers (comma-separated)", "AAPL,MSFT,GOOGL")[m
+[32m+[m[32m        tickers_raw = st.text_input("Enter tickers (comma-separated)", "AAPL,MSFT,GOOGL",[m[41m [m
+[32m+[m[32m                                    help="Examples: AAPL,MSFT or TCS.NS,INFY.NS")[m
+     with col2:[m
+         st.write("")[m
+         st.write("")[m
+[31m-        refresh_now = st.button("Refresh Now", use_container_width=True)[m
+[32m+[m[32m        refresh_now = st.button("🔄 Refresh Now", use_container_width=True)[m
+     [m
+     tickers = [t.strip().upper() for t in tickers_raw.split(",") if t.strip()][m
+     [m
+[32m+[m[32m    # Auto-refresh logic[m
+     should_refresh = refresh_now or (refresh_auto > 0 and (time.time() - st.session_state.last_refresh > refresh_auto))[m
+     [m
+     if tickers and should_refresh:[m
+         st.session_state.last_refresh = time.time()[m
+         [m
+         for t in tickers:[m
+[31m-            with st.expander(f"📈 {t}", expanded=True):[m
+[32m+[m[32m            with st.expander(f"📊 {t}", expanded=True):[m
+                 try:[m
+                     ticker_obj = yf.Ticker(t)[m
+                     intraday = ticker_obj.history(period="1d", interval="1m")[m
+                     [m
+                     if intraday is None or intraday.empty:[m
+[31m-                        st.warning(f"No intraday data for {t}")[m
+[32m+[m[32m                        st.warning(f"⚠️ No intraday data for {t}. Check ticker format.")[m
+                         continue[m
+                     [m
+[32m+[m[32m                    # Current price[m
+                     latest = intraday["Close"].iloc[-1][m
+                     prev_close = intraday["Close"].iloc[0][m
+                     change = latest - prev_close[m
+[36m@@ -587,6 +512,7 @@[m [melif page == "Real-Time Monitor":[m
+                     col2.metric("High", f"${intraday['High'].max():.2f}")[m
+                     col3.metric("Low", f"${intraday['Low'].min():.2f}")[m
+                     [m
+[32m+[m[32m                    # Chart with EMA[m
+                     intraday["EMA20"] = intraday["Close"].ewm(span=20, adjust=False).mean()[m
+                     [m
+                     fig = go.Figure()[m
+[36m@@ -615,33 +541,33 @@[m [melif page == "Real-Time Monitor":[m
+                     st.plotly_chart(fig, use_container_width=True)[m
+                     [m
+                 except Exception as e:[m
+[31m-                    st.error(f"Error fetching {t}: {e}")[m
+[32m+[m[32m                    st.error(f"❌ Error fetching {t}: {e}")[m
+ [m
+ # ---------------------------[m
+ # Page: Stock Analyzer[m
+ # ---------------------------[m
+[31m-elif page == "Stock Analyzer":[m
+[31m-    st.header("📊 Stock Analyzer")[m
+[32m+[m[32melif page == "📈 Stock Analyzer":[m
+[32m+[m[32m    st.header("📈 Stock Analyzer")[m
+     [m
+     col1, col2, col3 = st.columns([2, 1, 1])[m
+     with col1:[m
+[31m-        ticker = st.text_input("Ticker Symbol", "AAPL").upper()[m
+[32m+[m[32m        ticker = st.text_input("Ticker Symbol", "AAPL", help="Enter stock ticker").upper()[m
+     with col2:[m
+         period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y", "2y"], index=2)[m
+     with col3:[m
+         interval = st.selectbox("Interval", ["1d", "1wk"], index=0)[m
+     [m
+[31m-    if st.button("Analyze Stock", use_container_width=True):[m
+[32m+[m[32m    if st.button("🔍 Analyze Stock", use_container_width=True):[m
+         with st.spinner(f"Analyzing {ticker}..."):[m
+             try:[m
+                 t = yf.Ticker(ticker)[m
+                 hist = t.history(period=period, interval=interval)[m
+                 [m
+                 if hist is None or hist.empty:[m
+[31m-                    st.error("No data available for this ticker")[m
+[32m+[m[32m                    st.error("❌ No data available for this ticker.")[m
+                 else:[m
+                     # Price Chart[m
+[31m-                    st.subheader("📈 Price Chart")[m
+[32m+[m[32m                    st.subheader("📊 Price Chart")[m
+                     fig = go.Figure()[m
+                     fig.add_trace(go.Scatter([m
+                         x=hist.index,[m
+[36m@@ -660,7 +586,7 @@[m [melif page == "Stock Analyzer":[m
+                     st.plotly_chart(fig, use_container_width=True)[m
+                     [m
+                     # Fundamentals[m
+[31m-                    st.subheader("📊 Fundamentals")[m
+[32m+[m[32m                    st.subheader("📋 Fundamentals")[m
+                     info = getattr(t, "info", {}) or {}[m
+                     [m
+                     cols = st.columns(4)[m
+[36m@@ -677,9 +603,11 @@[m [melif page == "Stock Analyzer":[m
+                         else:[m
+                             col.metric(label, value)[m
+                     [m
+[31m-                    # Technical Analysis[m
+[31m-                    st.subheader("🔬 Technical Analysis")[m
+[32m+[m[32m                    # Technical Indicators[m
+[32m+[m[32m                    st.subheader("📊 Technical Analysis")[m
+                     df = compute_indicators(hist)[m
+[32m+[m[41m                    [m
+[32m+[m[32m                    # Calculate Risk Score[m
+                     risk_score, risk_level, risk_breakdown = calculate_risk_score(df)[m
+                     [m
+                     col1, col2 = st.columns(2)[m
+[36m@@ -694,24 +622,27 @@[m [melif page == "Stock Analyzer":[m
+                     [m
+                     with col2:[m
+                         signal = generate_signal(df)[m
+[31m-                        st.markdown(f"### Signal: **{signal}**")[m
+[32m+[m[32m                        signal_color = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡", "N/A": "⚪"}[m
+[32m+[m[32m                        st.markdown(f"### {signal_color.get(signal, '⚪')} Signal: **{signal}**")[m
+                         st.write("Based on EMA20/EMA50 crossover")[m
+                         [m
+[32m+[m[32m                        # RSI interpretation[m
+                         rsi_val = df['RSI'].iloc[-1][m
+                         if rsi_val > 70:[m
+[31m-                            st.warning("⚠ Overbought (RSI > 70)")[m
+[32m+[m[32m                            st.warning("⚠️ Overbought (RSI > 70)")[m
+                         elif rsi_val < 30:[m
+[31m-                            st.info("ℹ Oversold (RSI < 30)")[m
+[32m+[m[32m                            st.info("💡 Oversold (RSI < 30)")[m
+                     [m
+[31m-                    # Risk Analysis[m
+[32m+[m[32m                    # Risk Score Display[m
+                     st.markdown("---")[m
+[31m-                    st.subheader("⚠ Risk Analysis")[m
+[32m+[m[32m                    st.subheader("⚠️ Quantitative Risk Analysis")[m
+                     [m
+                     col1, col2, col3 = st.columns(3)[m
+                     col1.metric("Risk Score", f"{risk_score}/100")[m
+                     col2.metric("Risk Level", risk_level)[m
+                     col3.metric("Technical Signal", signal)[m
+                     [m
+[32m+[m[32m                    # Risk Breakdown[m
+                     st.write("**Risk Components:**")[m
+                     risk_df = pd.DataFrame([[m
+                         {"Factor": "Volatility (30%)", "Score": risk_breakdown.get('Volatility', 0), "Max": 30},[m
+[36m@@ -723,201 +654,72 @@[m [melif page == "Stock Analyzer":[m
+                     [m
+                     st.dataframe(risk_df, use_container_width=True, hide_index=True)[m
+                     [m
+[31m-                    # Local AI Analysis[m
+[31m-                    st.subheader("🤖 AI Analysis")[m
+[31m-                    analysis = generate_local_analysis(ticker, df)[m
+[31m-                    st.markdown(analysis)[m
+[32m+[m[32m                    st.info("""[m
+[32m+[m[32m                    **How Risk is Calculated:**[m
+[32m+[m[32m                    - **Volatility**: Higher price swings = higher risk[m
+[32m+[m[32m                    - **RSI**: Overbought (>70) or oversold (<30) = higher risk[m
+[32m+[m[32m                    - **Momentum**: Declining price trend = higher risk[m
+[32m+[m[32m                    - **MACD**: Bearish signal or weak momentum = higher risk[m
+[32m+[m[32m                    - **Volume**: Declining volume = higher risk (less liquidity)[m
+[32m+[m[32m                    """)[m
+                     [m
+[31m-            except Exception as e:[m
+[31m-                st.error(f"Error analyzing stock: {e}")[m
+[31m-[m
+[31m-# [Continue with remaining pages... Character limit reached. Would you like me to continue with the rest?][m
+[31m-[m
+[31m-# ---------------------------[m
+[31m-# Page: News & Sentiment[m
+[31m-# ---------------------------[m
+[31m-elif page == "News & Sentiment":[m
+[31m-    st.header("📰 News & Sentiment Analysis")[m
+[31m-    [m
+[31m-    col1, col2 = st.columns([2, 1])[m
+[31m-    with col1:[m
+[31m-        nt = st.text_input("Ticker for News", "AAPL").upper()[m
+[31m-    with col2:[m
+[31m-        ncount = st.slider("Headlines", 1, 10, 5)[m
+[31m-    [m
+[31m-    if st.button("Fetch News", use_container_width=True):[m
+[31m-        with st.spinner(f"Fetching news for {nt}..."):[m
+[31m-            try:[m
+[31m-                t = yf.Ticker(nt)[m
+[31m-                raw_news = getattr(t, "news", []) or [][m
+[31m-                [m
+[31m-                if not raw_news:[m
+[31m-                    st.warning("No news available from yfinance")[m
+[31m-                else:[m
+[31m-                    headlines = [][m
+[31m-                    for item in raw_news[:ncount]:[m
+[31m-                        title = item.get("title", "")[m
+[31m-                        link = item.get("link", "")[m
+[31m-                        publisher = item.get("publisher", "Unknown")[m
+[31m-                        [m
+[31m-                        if title:[m
+[31m-                            headlines.append({"title": title, "link": link, "publisher": publisher})[m
+[32m+[m[32m                    # Recent indicator data[m
+[32m+[m[32m                    st.write("**Recent Technical Data:**")[m
+[32m+[m[32m                    st.dataframe([m
+[32m+[m[32m                        df.tail(5)[["Close", "EMA20", "EMA50", "RSI", "MACD", "Signal"]].round(4),[m
+[32m+[m[32m                        use_container_width=True[m
+[32m+[m[32m                    )[m
+                     [m
+[31m-                    if headlines:[m
+[31m-                        st.subheader(f"📰 Latest Headlines for {nt}")[m
+[31m-                        [m
+[31m-                        # Extract headline texts for sentiment analysis[m
+[31m-                        headline_texts = [h['title'] for h in headlines][m
+[31m-                        [m
+[31m-                        # Perform sentiment analysis[m
+[31m-                        sentiment_results = analyze_news_sentiment(headline_texts)[m
+[31m-                        [m
+[31m-                        # Display sentiment summary[m
+[31m-                        st.markdown("### 📊 Sentiment Analysis Summary")[m
+[31m-                        col1, col2, col3, col4 = st.columns(4)[m
+[31m-                        [m
+[31m-                        col1.metric("Overall Sentiment", sentiment_results['overall_sentiment'])[m
+[31m-                        col2.metric("Positive", sentiment_results['positive_count'])[m
+[31m-                        col3.metric("Negative", sentiment_results['negative_count'])[m
+[31m-                        col4.metric("Neutral", sentiment_results['neutral_count'])[m
+[31m-                        [m
+[31m-                        # Sentiment score visualization[m
+[31m-                        sentiment_score = sentiment_results['sentiment_score'][m
+[31m-                        st.progress(min(max((sentiment_score + 1) / 2, 0), 1))[m
+[31m-                        [m
+[31m-                        if sentiment_score > 0.15:[m
+[31m-                            st.success("📈 Bullish sentiment detected - Positive news flow")[m
+[31m-                        elif sentiment_score < -0.15:[m
+[31m-                            st.error("📉 Bearish sentiment detected - Negative news flow")[m
+[31m-                        else:[m
+[31m-                            st.info("➡️ Neutral sentiment - Mixed signals")[m
+[31m-                        [m
+[31m-                        st.markdown("---")[m
+[31m-                        st.markdown("### 📑 Individual Headlines")[m
+[31m-                        [m
+[31m-                        for i, h in enumerate(headlines, 1):[m
+[31m-                            polarity, label, confidence = analyze_sentiment_local(h['title'])[m
+[31m-                            [m
+[31m-                            # Color code based on sentiment[m
+[31m-                            if label == "Positive":[m
+[31m-                                sentiment_color = "🟢"[m
+[31m-                            elif label == "Negative":[m
+[31m-                                sentiment_color = "🔴"[m
+[31m-                            else:[m
+[31m-                                sentiment_color = "🟡"[m
+[31m-                            [m
+[31m-                            with st.expander(f"{sentiment_color} {h['title']}", expanded=(i <= 3)):[m
+[31m-                                st.write(f"**Publisher:** {h['publisher']}")[m
+[31m-                                st.write(f"**Sentiment:** {label} (Score: {polarity:.2f})")[m
+[31m-                                st.write(f"**Confidence:** {confidence:.2%}")[m
+[31m-                                if h['link']:[m
+[31m-                                    st.markdown(f"[Read full article]({h['link']})")[m
+[31m-                        [m
+[31m-                        # Detailed sentiment analysis[m
+[31m-                        st.markdown("---")[m
+[31m-                        st.subheader("🔍 Detailed Sentiment Analysis")[m
+[31m-                        [m
+[31m-                        analysis_text = f"""[m
+[31m-## News Sentiment Report for {nt}[m
+[31m-[m
+[31m-### Sentiment Breakdown[m
+[31m-- **Overall Sentiment**: {sentiment_results['overall_sentiment']}[m
+[31m-- **Sentiment Score**: {sentiment_score:.3f} (Range: -1 to +1)[m
+[31m-- **Positive Headlines**: {sentiment_results['positive_count']}[m
+[31m-- **Negative Headlines**: {sentiment_results['negative_count']}[m
+[31m-- **Neutral Headlines**: {sentiment_results['neutral_count']}[m
+[32m+[m[32m                    # AI Analysis[m
+[32m+[m[32m                    st.subheader("🤖 AI Analysis")[m
+[32m+[m[32m                    prompt = f"""You are a senior market analyst. Analyze {ticker} based on its recent {period} performance.[m
+[32m+[m[41m                    [m
+[32m+[m[32mLatest data:[m
+[32m+[m[32m- Current Price: ${df['Close'].iloc[-1]:.2f}[m
+[32m+[m[32m- EMA20: ${df['EMA20'].iloc[-1]:.2f}[m
+[32m+[m[32m- EMA50: ${df['EMA50'].iloc[-1]:.2f}[m
+[32m+[m[32m- RSI: {df['RSI'].iloc[-1]:.2f}[m
+[32m+[m[32m- Technical Signal: {signal}[m
+[32m+[m[32m- Calculated Risk Score: {risk_score}/100 ({risk_level})[m
+ [m
+[31m-### Market Implications[m
+[32m+[m[32mRisk Breakdown:[m
+[32m+[m[32m- Volatility Risk: {risk_breakdown.get('Volatility', 0)}/30[m
+[32m+[m[32m- RSI Risk: {risk_breakdown.get('RSI', 0)}/20[m
+[32m+[m[32m- Momentum Risk: {risk_breakdown.get('Momentum', 0)}/20[m
+[32m+[m[32m- MACD Risk: {risk_breakdown.get('MACD', 0)}/15[m
+[32m+[m[32m- Volume Risk: {risk_breakdown.get('Volume', 0)}/15[m
+ [m
+[31m-"""[m
+[31m-                        [m
+[31m-                        if sentiment_results['overall_sentiment'] == "Bullish":[m
+[31m-                            analysis_text += """[m
+[31m-**Bullish Outlook:**[m
+[31m-- Positive news flow suggests favorable market perception[m
+[31m-- Increased investor confidence likely[m
+[31m-- Potential for upward price movement[m
+[31m-- Consider monitoring for entry opportunities[m
+[31m-[m
+[31m-**Key Considerations:**[m
+[31m-- Verify if positive sentiment is backed by fundamentals[m
+[31m-- Watch for profit-taking if sentiment becomes too optimistic[m
+[31m-- Maintain risk management protocols[m
+[31m-"""[m
+[31m-                        elif sentiment_results['overall_sentiment'] == "Bearish":[m
+[31m-                            analysis_text += """[m
+[31m-**Bearish Outlook:**[m
+[31m-- Negative news flow indicates potential concerns[m
+[31m-- Investor sentiment may be declining[m
+[31m-- Downward price pressure possible[m
+[31m-- Exercise caution with new positions[m
+[31m-[m
+[31m-**Key Considerations:**[m
+[31m-- Determine if negative sentiment is temporary or fundamental[m
+[31m-- Look for potential oversold opportunities[m
+[31m-- Consider protective strategies for existing positions[m
+[31m-"""[m
+[31m-                        else:[m
+[31m-                            analysis_text += """[m
+[31m-**Neutral Outlook:**[m
+[31m-- Mixed news signals indicate uncertainty[m
+[31m-- Market may be in consolidation phase[m
+[31m-- Wait for clearer directional signals[m
+[31m-- Focus on other technical indicators[m
+[31m-[m
+[31m-**Key Considerations:**[m
+[31m-- Monitor for sentiment shifts[m
+[31m-- Maintain balanced approach[m
+[31m-- Consider diversification strategies[m
+[31m-"""[m
+[31m-                        [m
+[31m-                        analysis_text += f"""[m
+[32m+[m[32mProvide:[m
+[32m+[m[32m1. Overall Sentiment (Bullish/Neutral/Bearish) - explain why based on the metrics[m
+[32m+[m[32m2. Commentary on the risk score - is it justified?[m
+[32m+[m[32m3. Recommendation (Buy/Hold/Sell) with conviction level[m
+[32m+[m[32m4. Key technical levels to watch (support/resistance)[m
+[32m+[m[32m5. Important considerations for investors[m
+ [m
+[31m-### Sentiment Trend[m
+[31m-Based on the {len(headlines)} most recent headlines, the aggregate sentiment score of {sentiment_score:.3f} suggests:[m
+[31m-"""[m
+[31m-                        [m
+[31m-                        if abs(sentiment_score) > 0.3:[m
+[31m-                            analysis_text += "- **Strong conviction** in the prevailing sentiment\n"[m
+[31m-                        elif abs(sentiment_score) > 0.15:[m
+[31m-                            analysis_text += "- **Moderate conviction** with room for reversal\n"[m
+[31m-                        else:[m
+[31m-                            analysis_text += "- **Low conviction** - sentiment could shift quickly\n"[m
+[31m-                        [m
+[31m-                        analysis_text += "\n### Recommended Actions\n"[m
+[31m-                        [m
+[31m-                        if sentiment_results['positive_count'] > sentiment_results['negative_count'] * 2:[m
+[31m-                            analysis_text += "- Consider the stock favorably for new positions\n"[m
+[31m-                            analysis_text += "- Monitor for profit-taking opportunities\n"[m
+[31m-                        elif sentiment_results['negative_count'] > sentiment_results['positive_count'] * 2:[m
+[31m-                            analysis_text += "- Exercise caution with new investments\n"[m
+[31m-                            analysis_text += "- Review existing positions for risk\n"[m
+[31m-                        else:[m
+[31m-                            analysis_text += "- Maintain watchlist status\n"[m
+[31m-                            analysis_text += "- Wait for clearer signals before acting\n"[m
+[31m-                        [m
+[31m-                        analysis_text += "\n---\n*Analysis based on natural language processing of news headlines*"[m
+[31m-                        [m
+[31m-                        st.markdown(analysis_text)[m
+[31m-                    else:[m
+[31m-                        st.warning("Could not extract headlines from news data")[m
+[31m-                        [m
+[32m+[m[32mKeep response concise and actionable. Focus on interpreting the quantitative data provided."""[m
+[32m+[m[41m                    [m
+[32m+[m[32m                    with st.spinner("🤖 Consulting Gemini AI..."):[m
+[32m+[m[32m                        ai_response = ask_gemini(prompt)[m
+[32m+[m[41m                    [m
+[32m+[m[32m                    st.markdown(ai_response)[m
+[32m+[m[41m                    [m
+             except Exception as e:[m
+[31m-                st.error(f"Error fetching news: {e}")[m
+[32m+[m[32m                st.error(f"❌ Error analyzing stock: {e}")[m
+ [m
+ # ---------------------------[m
+[31m-# Page: Cryptocurrency[m
+[32m+[m[32m# Page: Crypto[m
+ # ---------------------------[m
+[31m-elif page == "Cryptocurrency":[m
+[31m-    st.header("💰 Cryptocurrency Analyzer")[m
+[32m+[m[32melif page == "₿ Crypto":[m
+[32m+[m[32m    st.header("₿ Cryptocurrency Analyzer")[m
+     [m
+     col1, col2 = st.columns([2, 1])[m
+     with col1:[m
+[31m-        crypto = st.text_input("Crypto Ticker", "BTC-USD").upper()[m
+[32m+[m[32m        crypto = st.text_input("Crypto Ticker", "BTC-USD",[m[41m [m
+[32m+[m[32m                               help="Format: BTC-USD, ETH-USD, etc.").upper()[m
+     with col2:[m
+         c_period = st.selectbox("Period", ["1d", "5d", "1mo", "3mo", "6mo"], index=2)[m
+     [m
+[31m-    if st.button("Analyze Crypto", use_container_width=True):[m
+[32m+[m[32m    if st.button("🔍 Analyze Crypto", use_container_width=True):[m
+         with st.spinner(f"Analyzing {crypto}..."):[m
+             try:[m
+                 crypto_obj = yf.Ticker(crypto)[m
+[36m@@ -925,7 +727,7 @@[m [melif page == "Cryptocurrency":[m
+                 ch = crypto_obj.history(period=c_period, interval=interval)[m
+                 [m
+                 if ch is None or ch.empty:[m
+[31m-                    st.error("No data available for this crypto ticker")[m
+[32m+[m[32m                    st.error("❌ No data available for this crypto ticker.")[m
+                 else:[m
+                     # Metrics[m
+                     latest = ch["Close"].iloc[-1][m
+[36m@@ -975,123 +777,84 @@[m [melif page == "Cryptocurrency":[m
+                     )[m
+                     st.plotly_chart(fig_vol, use_container_width=True)[m
+                     [m
+[31m-                    # Technical Analysis[m
+[31m-                    st.subheader("🔬 Technical Analysis")[m
+[31m-                    ch_indicators = compute_indicators(ch)[m
+[31m-                    [m
+[31m-                    if len(ch_indicators) > 50:[m
+[31m-                        crypto_analysis = f"""[m
+[31m-## Cryptocurrency Analysis: {crypto}[m
+[32m+[m[32m                    # AI Sentiment[m
+[32m+[m[32m                    st.subheader("🤖 AI Crypto Sentiment")[m
+[32m+[m[32m                    prompt = f"""Analyze {crypto} cryptocurrency for the last {c_period}.[m
+ [m
+[31m-### Current Market Status[m
+[31m-- **Price**: ${latest:,.2f}[m
+[31m-- **Period Range**: ${low:,.2f} - ${high:,.2f}[m
+[31m-- **Volatility**: {((high-low)/low*100):.2f}%[m
+[32m+[m[32mCurrent data:[m
+[32m+[m[32m- Price: ${latest:,.2f}[m
+[32m+[m[32m- Period High: ${high:,.2f}[m
+[32m+[m[32m- Period Low: ${low:,.2f}[m
+[32m+[m[32m- Price range: {((high-low)/low*100):.2f}%[m
+ [m
+[31m-### Technical Indicators[m
+[31m-"""[m
+[31m-                        [m
+[31m-                        if 'RSI' in ch_indicators.columns:[m
+[31m-                            rsi_val = ch_indicators['RSI'].iloc[-1][m
+[31m-                            crypto_analysis += f"- **RSI**: {rsi_val:.2f}\n"[m
+[31m-                            if rsi_val > 70:[m
+[31m-                                crypto_analysis += "  - Overbought condition - potential correction ahead\n"[m
+[31m-                            elif rsi_val < 30:[m
+[31m-                                crypto_analysis += "  - Oversold condition - potential bounce opportunity\n"[m
+[31m-                            else:[m
+[31m-                                crypto_analysis += "  - Neutral range\n"[m
+[31m-                        [m
+[31m-                        # Price momentum[m
+[31m-                        returns = ch['Close'].pct_change().dropna()[m
+[31m-                        volatility = returns.std() * np.sqrt(24)  # Hourly volatility[m
+[31m-                        [m
+[31m-                        crypto_analysis += f"\n### Risk Assessment\n"[m
+[31m-                        crypto_analysis += f"- **Volatility**: {volatility*100:.2f}%\n"[m
+[31m-                        [m
+[31m-                        if volatility > 0.5:[m
+[31m-                            crypto_analysis += "- **Risk Level**: Very High - Extreme price swings expected\n"[m
+[31m-                            crypto_analysis += "- **Recommendation**: Only for experienced traders with high risk tolerance\n"[m
+[31m-                        elif volatility > 0.3:[m
+[31m-                            crypto_analysis += "- **Risk Level**: High - Significant price movements likely\n"[m
+[31m-                            crypto_analysis += "- **Recommendation**: Use tight stop losses and position sizing\n"[m
+[31m-                        else:[m
+[31m-                            crypto_analysis += "- **Risk Level**: Moderate - Standard crypto volatility\n"[m
+[31m-                            crypto_analysis += "- **Recommendation**: Normal trading strategies apply\n"[m
+[31m-                        [m
+[31m-                        # Support and resistance[m
+[31m-                        recent_high = ch['High'].tail(20).max()[m
+[31m-                        recent_low = ch['Low'].tail(20).min()[m
+[31m-                        [m
+[31m-                        crypto_analysis += f"\n### Key Levels\n"[m
+[31m-                        crypto_analysis += f"- **Resistance**: ${recent_high:,.2f}\n"[m
+[31m-                        crypto_analysis += f"- **Support**: ${recent_low:,.2f}\n"[m
+[31m-                        crypto_analysis += f"- **Current Position**: {((latest-recent_low)/(recent_high-recent_low)*100):.1f}% of range\n"[m
+[31m-                        [m
+[31m-                        crypto_analysis += "\n### Trading Considerations\n"[m
+[31m-                        crypto_analysis += "- Monitor Bitcoin dominance for market correlation\n"[m
+[31m-                        crypto_analysis += "- Watch for regulatory news affecting crypto markets\n"[m
+[31m-                        crypto_analysis += "- Consider market sentiment and social media trends\n"[m
+[31m-                        crypto_analysis += "- Use appropriate position sizing for volatile assets\n"[m
+[31m-                        [m
+[31m-                        crypto_analysis += "\n---\n*Crypto analysis based on technical indicators and price action*"[m
+[31m-                        [m
+[31m-                        st.markdown(crypto_analysis)[m
+[31m-                    else:[m
+[31m-                        st.info("Insufficient data for detailed technical analysis")[m
+[32m+[m[32mProvide:[m
+[32m+[m[32m1. Overall sentiment (Bullish/Bearish/Neutral)[m
+[32m+[m[32m2. Short-term outlook (next 7 days)[m
+[32m+[m[32m3. Key support and resistance levels[m
+[32m+[m[32m4. Risk assessment[m
+[32m+[m[32m5. Trading considerations[m
+[32m+[m
+[32m+[m[32mBe concise and specific."""[m
+[32m+[m[41m                    [m
+[32m+[m[32m                    with st.spinner("🤖 Analyzing with Gemini..."):[m
+[32m+[m[32m                        ai_response = ask_gemini(prompt)[m
+[32m+[m[41m                    [m
+[32m+[m[32m                    st.markdown(ai_response)[m
+                     [m
+             except Exception as e:[m
+[31m-                st.error(f"Error analyzing crypto: {e}")[m
+[32m+[m[32m                st.error(f"❌ Error analyzing crypto: {e}")[m
+ [m
+ # ---------------------------[m
+[31m-# Page: Portfolio Manager[m
+[32m+[m[32m# Page: Portfolio[m
+ # ---------------------------[m
+[31m-elif page == "Portfolio Manager":[m
+[32m+[m[32melif page == "💼 Portfolio":[m
+     st.header("💼 Portfolio Management")[m
+     [m
+[31m-    st.markdown("### Add New Position")[m
+[32m+[m[32m    st.markdown("### ➕ Add New Position")[m
+     [m
+     with st.form("add_position", clear_on_submit=True):[m
+         col1, col2, col3 = st.columns(3)[m
+         [m
+         with col1:[m
+[31m-            ticker = st.text_input("Ticker", "AAPL")[m
+[32m+[m[32m            ticker = st.text_input("Ticker", "AAPL", help="Stock ticker symbol")[m
+         with col2:[m
+             qty = st.number_input("Quantity", min_value=0.01, value=1.0, step=1.0)[m
+         with col3:[m
+             avg = st.number_input("Avg Price", min_value=0.0, value=0.0, step=0.01,[m
+                                  help="0 = fetch current price")[m
+         [m
+[31m-        submitted = st.form_submit_button("Add Position", use_container_width=True)[m
+[32m+[m[32m        submitted = st.form_submit_button("➕ Add Position", use_container_width=True)[m
+         [m
+         if submitted:[m
+             ticker = ticker.upper().strip()[m
+             if not ticker:[m
+[31m-                st.error("Please enter a ticker symbol")[m
+[32m+[m[32m                st.error("❌ Please enter a ticker symbol.")[m
+             else:[m
+                 if avg == 0.0:[m
+                     with st.spinner(f"Fetching current price for {ticker}..."):[m
+                         cur = get_current_price(ticker)[m
+                     if cur is None:[m
+[31m-                        st.error("Could not fetch current price. Please enter average price manually")[m
+[32m+[m[32m                        st.error("❌ Could not fetch current price. Please enter average price manually.")[m
+                     else:[m
+                         add_position_db(ticker, qty, cur)[m
+[31m-                        st.success(f"Added {qty} x {ticker} @ ${cur:.2f}")[m
+[32m+[m[32m                        st.success(f"✅ Added {qty} x {ticker} @ ${cur:.2f}")[m
+                         time.sleep(0.5)[m
+                         st.rerun()[m
+                 else:[m
+                     add_position_db(ticker, qty, avg)[m
+[31m-                    st.success(f"Added {qty} x {ticker} @ ${avg:.2f}")[m
+[32m+[m[32m                    st.success(f"✅ Added {qty} x {ticker} @ ${avg:.2f}")[m
+                     time.sleep(0.5)[m
+                     st.rerun()[m
+     [m
+     st.markdown("---")[m
+[31m-    st.markdown("### Current Holdings")[m
+[32m+[m[32m    st.markdown("### 📊 Current Holdings")[m
+     [m
+     df = list_positions_db()[m
+     [m
+     if df.empty:[m
+[31m-        st.info("No positions yet. Add your first position above")[m
+[32m+[m[32m        st.info("📭 No positions yet. Add your first position above!")[m
+     else:[m
+[32m+[m[32m        # Compute live values[m
+         rows = [][m
+         total_value = 0[m
+         total_pl = 0[m
+[36m@@ -1100,7 +863,7 @@[m [melif page == "Portfolio Manager":[m
+             for idx, r in df.iterrows():[m
+                 cur = get_current_price(r['ticker'])[m
+                 if cur is None:[m
+[31m-                    cur = r['avg_price'][m
+[32m+[m[32m                    cur = r['avg_price']  # Fallback to avg price[m
+                 [m
+                 val = cur * r['qty'][m
+                 pl = (cur - r['avg_price']) * r['qty'][m
+[36m@@ -1134,7 +897,7 @@[m [melif page == "Portfolio Manager":[m
+         st.dataframe(pdf, use_container_width=True, hide_index=True)[m
+         [m
+         # Remove position[m
+[31m-        st.markdown("### Remove Position")[m
+[32m+[m[32m        st.markdown("### 🗑️ Remove Position")[m
+         col1, col2 = st.columns([2, 1])[m
+         [m
+         with col1:[m
+[36m@@ -1142,37 +905,105 @@[m [melif page == "Portfolio Manager":[m
+         with col2:[m
+             st.write("")[m
+             st.write("")[m
+[31m-            if st.button("Remove", use_container_width=True):[m
+[32m+[m[32m            if st.button("🗑️ Remove", use_container_width=True):[m
+                 remove_position_db(rem_id)[m
+[31m-                st.success(f"Position {rem_id} removed")[m
+[32m+[m[32m                st.success(f"✅ Position {rem_id} removed.")[m
+                 time.sleep(0.5)[m
+                 st.rerun()[m
+ [m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32m# Page: News & Sentiment[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32melif page == "📰 News & Sentiment":[m
+[32m+[m[32m    st.header("📰 News & Sentiment Analysis")[m
+[32m+[m[41m    [m
+[32m+[m[32m    col1, col2 = st.columns([2, 1])[m
+[32m+[m[32m    with col1:[m
+[32m+[m[32m        nt = st.text_input("Ticker for News", "AAPL", help="Enter stock ticker").upper()[m
+[32m+[m[32m    with col2:[m
+[32m+[m[32m        ncount = st.slider("Headlines", 1, 10, 5)[m
+[32m+[m[41m    [m
+[32m+[m[32m    if st.button("📰 Fetch News", use_container_width=True):[m
+[32m+[m[32m        with st.spinner(f"Fetching news for {nt}..."):[m
+[32m+[m[32m            try:[m
+[32m+[m[32m                t = yf.Ticker(nt)[m
+[32m+[m[32m                raw_news = getattr(t, "news", []) or [][m
+[32m+[m[41m                [m
+[32m+[m[32m                if not raw_news:[m
+[32m+[m[32m                    st.warning("⚠️ No news available from yfinance. Coverage may vary by ticker.")[m
+[32m+[m[32m                else:[m
+[32m+[m[32m                    headlines = [][m
+[32m+[m[32m                    for item in raw_news[:ncount]:[m
+[32m+[m[32m                        title = item.get("title", "")[m
+[32m+[m[32m                        link = item.get("link", "")[m
+[32m+[m[32m                        publisher = item.get("publisher", "Unknown")[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        if title:[m
+[32m+[m[32m                            headlines.append({"title": title, "link": link, "publisher": publisher})[m
+[32m+[m[41m                    [m
+[32m+[m[32m                    if headlines:[m
+[32m+[m[32m                        st.subheader(f"📰 Latest Headlines for {nt}")[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        for i, h in enumerate(headlines, 1):[m
+[32m+[m[32m                            with st.expander(f"{i}. {h['title']}", expanded=(i <= 3)):[m
+[32m+[m[32m                                st.write(f"**Publisher:** {h['publisher']}")[m
+[32m+[m[32m                                if h['link']:[m
+[32m+[m[32m                                    st.markdown(f"[Read full article]({h['link']})")[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        # AI Sentiment Analysis[m
+[32m+[m[32m                        st.markdown("---")[m
+[32m+[m[32m                        st.subheader("🤖 AI Sentiment Analysis")[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        headline_text = "\n".join([f"{i+1}. {h['title']}" for i, h in enumerate(headlines)])[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        prompt = f"""Analyze the sentiment and potential market impact of these recent headlines for {nt}:[m
+[32m+[m
+[32m+[m[32m{headline_text}[m
+[32m+[m
+[32m+[m[32mProvide:[m
+[32m+[m[32m1. Overall sentiment (Positive/Negative/Mixed/Neutral)[m
+[32m+[m[32m2. Key themes from the news[m
+[32m+[m[32m3. Potential impact on stock price (Short-term and Medium-term)[m
+[32m+[m[32m4. Investor considerations[m
+[32m+[m[32m5. Risk factors mentioned[m
+[32m+[m
+[32m+[m[32mBe specific and actionable."""[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        with st.spinner("🤖 Analyzing sentiment with Gemini..."):[m
+[32m+[m[32m                            ai_response = ask_gemini(prompt)[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        st.markdown(ai_response)[m
+[32m+[m[32m                    else:[m
+[32m+[m[32m                        st.warning("⚠️ Could not extract headlines from news data.")[m
+[32m+[m[41m                        [m
+[32m+[m[32m            except Exception as e:[m
+[32m+[m[32m                st.error(f"❌ Error fetching news: {e}")[m
+[32m+[m
+ # ---------------------------[m
+ # Page: Predictions[m
+ # ---------------------------[m
+[31m-elif page == "Predictions":[m
+[31m-    st.header("🔮 Technical Price Predictions")[m
+[32m+[m[32melif page == "🔮 Predictions":[m
+[32m+[m[32m    st.header("🔮 AI Price Predictions")[m
+     [m
+[31m-    st.info("**Disclaimer**: These predictions are based on technical analysis and historical patterns. Markets are unpredictable. Always do your own research.")[m
+[32m+[m[32m    st.info("⚠️ **Disclaimer**: These are AI-generated predictions based on historical data and should NOT be used as financial advice. Always do your own research.")[m
+     [m
+     col1, col2 = st.columns([2, 1])[m
+     with col1:[m
+[31m-        pt = st.text_input("Ticker", "AAPL").upper()[m
+[32m+[m[32m        pt = st.text_input("Ticker", "AAPL", help="Enter stock ticker").upper()[m
+     with col2:[m
+         days = st.slider("Days Ahead", 1, 30, 7)[m
+     [m
+[31m-    if st.button("Generate Prediction", use_container_width=True):[m
+[32m+[m[32m    if st.button("🔮 Generate Prediction", use_container_width=True):[m
+         with st.spinner(f"Generating prediction for {pt}..."):[m
+             try:[m
+                 ticker_obj = yf.Ticker(pt)[m
+                 hist = ticker_obj.history(period="6mo")[m
+                 [m
+                 if hist is None or hist.empty:[m
+[31m-                    st.error("Not enough historical data for prediction")[m
+[32m+[m[32m                    st.error("❌ Not enough historical data for prediction.")[m
+                 else:[m
+                     # Display recent price action[m
+[31m-                    st.subheader("📈 Recent Price History")[m
+[32m+[m[32m                    st.subheader("📊 Recent Price History")[m
+                     [m
+                     fig = go.Figure()[m
+                     fig.add_trace(go.Scatter([m
+[36m@@ -1190,164 +1021,641 @@[m [melif page == "Predictions":[m
+                     )[m
+                     st.plotly_chart(fig, use_container_width=True)[m
+                     [m
+[31m-                    # Calculate statistics[m
+[32m+[m[32m                    # Get recent data for AI[m
+                     recent_closes = hist["Close"].tail(30).tolist()[m
+                     current_price = recent_closes[-1][m
+                     avg_30d = np.mean(recent_closes)[m
+                     volatility = np.std(recent_closes)[m
+[31m-                    returns = hist["Close"].pct_change().dropna()[m
+[31m-                    avg_daily_return = returns.mean()[m
+                     [m
+                     col1, col2, col3 = st.columns(3)[m
+                     col1.metric("Current Price", f"${current_price:.2f}")[m
+                     col2.metric("30-Day Avg", f"${avg_30d:.2f}")[m
+                     col3.metric("Volatility", f"${volatility:.2f}")[m
+                     [m
+[31m-                    # Technical prediction[m
+[32m+[m[32m                    # AI Prediction[m
+                     st.markdown("---")[m
+[31m-                    st.subheader("📊 Technical Forecast")[m
+[32m+[m[32m                    st.subheader("🤖 AI-Generated Forecast")[m
+                     [m
+[31m-                    # Simple momentum-based prediction[m
+[31m-                    predicted_price = current_price * (1 + avg_daily_return * days)[m
+[31m-                    upper_bound = predicted_price + (volatility * np.sqrt(days) * 2)[m
+[31m-                    lower_bound = predicted_price - (volatility * np.sqrt(days) * 2)[m
+[31m-                    [m
+[31m-                    # Compute technical indicators[m
+[31m-                    df_pred = compute_indicators(hist)[m
+[31m-                    signal = generate_signal(df_pred)[m
+[31m-                    rsi = df_pred['RSI'].iloc[-1][m
+[31m-                    [m
+[31m-                    prediction_text = f"""[m
+[31m-## {days}-Day Price Forecast for {pt}[m
+[31m-[m
+[31m-### Predicted Price Range[m
+[31m-- **Most Likely Price**: ${predicted_price:.2f}[m
+[31m-- **Upper Bound (95% confidence)**: ${upper_bound:.2f}[m
+[31m-- **Lower Bound (95% confidence)**: ${lower_bound:.2f}[m
+[31m-- **Expected Change**: {((predicted_price - current_price) / current_price * 100):+.2f}%[m
+[31m-[m
+[31m-### Prediction Methodology[m
+[31m-This forecast uses:[m
+[31m-- Historical volatility: ${volatility:.2f}[m
+[31m-- Average daily return: {avg_daily_return*100:.3f}%[m
+[31m-- Current momentum indicators[m
+[31m-- Technical signal: {signal}[m
+[31m-[m
+[31m-### Probability Analysis[m
+[31m-"""[m
+[32m+[m[32m                    prompt = f"""You are a quantitative analyst. Based on the recent 30-day closing prices for {pt}, provide a probabilistic forecast.[m
+[32m+[m
+[32m+[m[32mRecent closing prices (last 30 days): {recent_closes}[m
+[32m+[m
+[32m+[m[32mCurrent statistics:[m
+[32m+[m[32m- Current Price: ${current_price:.2f}[m
+[32m+[m[32m- 30-Day Average: ${avg_30d:.2f}[m
+[32m+[m[32m- Volatility (Std Dev): ${volatility:.2f}[m
+[32m+[m
+[32m+[m[32mForecast for the next {days} days:[m
+[32m+[m
+[32m+[m[32mProvide:[m
+[32m+[m[32m1. Expected price range (Low-High)[m
+[32m+[m[32m2. Most likely price target[m
+[32m+[m[32m3. Probability of price increase vs. decrease[m
+[32m+[m[32m4. Confidence level (0-100)[m
+[32m+[m[32m5. Key factors that could affect the prediction[m
+[32m+[m[32m6. Risk considerations[m
+[32m+[m[32m7. Technical support/resistance levels[m
+[32m+[m
+[32m+[m[32mBe realistic and acknowledge uncertainty. Frame this as a probabilistic analysis, not a guarantee."""[m
+                     [m
+[31m-                    # Probability assessment[m
+[31m-                    if signal == "BUY" and rsi < 70:[m
+[31m-                        prediction_text += "- **Upside Probability**: 65-70%\n"[m
+[31m-                        prediction_text += "- **Reasoning**: Bullish technical setup with room to run\n"[m
+[31m-                    elif signal == "SELL" and rsi > 30:[m
+[31m-                        prediction_text += "- **Downside Probability**: 65-70%\n"[m
+[31m-                        prediction_text += "- **Reasoning**: Bearish technical setup suggests weakness\n"[m
+[31m-                    else:[m
+[31m-                        prediction_text += "- **Probability**: 50-55% (Neutral)\n"[m
+[31m-                        prediction_text += "- **Reasoning**: Mixed signals, direction unclear\n"[m
+[32m+[m[32m                    with st.spinner("🤖 Generating forecast with Gemini..."):[m
+[32m+[m[32m                        ai_response = ask_gemini(prompt)[m
+                     [m
+[31m-                    prediction_text += f"\n### Key Factors to Monitor\n"[m
+[32m+[m[32m                    st.markdown(ai_response)[m
+                     [m
+[31m-                    # Support/Resistance[m
+[31m-                    resistance = hist['High'].tail(30).max()[m
+[31m-                    support = hist['Low'].tail(30).min()[m
+[32m+[m[32m                    st.warning("⚠️ **Important**: This prediction is based on historical patterns and AI analysis. Markets are unpredictable and many factors can affect prices. Never invest based solely on predictions.")[m
+                     [m
+[31m-                    prediction_text += f"- **Resistance Level**: ${resistance:.2f}\n"[m
+[31m-                    prediction_text += f"- **Support Level**: ${support:.2f}\n"[m
+[32m+[m[32m            except Exception as e:[m
+[32m+[m[32m                st.error(f"❌ Error generating prediction: {e}")[m
+[32m+[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32m# Page: AI Research Assistant (NEW)[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32melif page == "🤖 AI Research Assistant":[m
+[32m+[m[32m    st.header("🤖 AI Research Assistant")[m
+[32m+[m[32m    st.markdown("Ask any investment question and get AI-powered insights with real market data!")[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Quick action buttons[m
+[32m+[m[32m    st.markdown("### 💡 Quick Questions")[m
+[32m+[m[32m    col1, col2, col3 = st.columns(3)[m
+[32m+[m[41m    [m
+[32m+[m[32m    with col1:[m
+[32m+[m[32m        if st.button("🚀 Hot Stocks Today", use_container_width=True):[m
+[32m+[m[32m            st.session_state.research_query = "Which stocks are showing the strongest momentum today? Analyze top gainers."[m
+[32m+[m[32m    with col2:[m
+[32m+[m[32m        if st.button("📉 Oversold Opportunities", use_container_width=True):[m
+[32m+[m[32m            st.session_state.research_query = "Find oversold stocks with RSI < 30 that might bounce back soon."[m
+[32m+[m[32m    with col3:[m
+[32m+[m[32m        if st.button("🏆 Top Tech Stocks", use_container_width=True):[m
+[32m+[m[32m            st.session_state.research_query = "What are the best technology stocks to invest in right now?"[m
+[32m+[m[41m    [m
+[32m+[m[32m    col4, col5, col6 = st.columns(3)[m
+[32m+[m[32m    with col4:[m
+[32m+[m[32m        if st.button("💰 Best Dividend Stocks", use_container_width=True):[m
+[32m+[m[32m            st.session_state.research_query = "What are the highest dividend-paying stocks with stable fundamentals?"[m
+[32m+[m[32m    with col5:[m
+[32m+[m[32m        if st.button("🌟 Growth Stocks", use_container_width=True):[m
+[32m+[m[32m            st.session_state.research_query = "Which growth stocks have the highest potential for 2025?"[m
+[32m+[m[32m    with col6:[m
+[32m+[m[32m        if st.button("🛡️ Safe Investments", use_container_width=True):[m
+[32m+[m[32m            st.session_state.research_query = "What are the safest, low-risk stocks for conservative investors?"[m
+[32m+[m[41m    [m
+[32m+[m[32m    st.markdown("---")[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Custom query input[m
+[32m+[m[32m    if "research_query" not in st.session_state:[m
+[32m+[m[32m        st.session_state.research_query = ""[m
+[32m+[m[41m    [m
+[32m+[m[32m    query = st.text_area([m
+[32m+[m[32m        "🔍 Ask your investment question:",[m
+[32m+[m[32m        value=st.session_state.research_query,[m
+[32m+[m[32m        height=100,[m
+[32m+[m[32m        placeholder="Examples:\n- Which stocks will rise high this month and why?\n- Compare AAPL vs MSFT for long-term investment\n- What are the best Indian stocks in the EV sector?\n- Should I buy Tesla now? Analyze risks and opportunities"[m
+[32m+[m[32m    )[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Analysis depth[m
+[32m+[m[32m    col1, col2 = st.columns([2, 1])[m
+[32m+[m[32m    with col1:[m
+[32m+[m[32m        tickers_to_analyze = st.text_input([m
+[32m+[m[32m            "📊 Specific tickers to analyze (optional, comma-separated)",[m
+[32m+[m[32m            placeholder="e.g., AAPL,MSFT,GOOGL or INFY.NS,TCS.NS",[m
+[32m+[m[32m            help="Leave empty for general analysis"[m
+[32m+[m[32m        )[m
+[32m+[m[32m    with col2:[m
+[32m+[m[32m        depth = st.selectbox("Analysis Depth", ["Quick", "Detailed", "Deep Dive"], index=1)[m
+[32m+[m[41m    [m
+[32m+[m[32m    if st.button("🔍 Research & Analyze", type="primary", use_container_width=True):[m
+[32m+[m[32m        if not query.strip():[m
+[32m+[m[32m            st.error("❌ Please enter a question!")[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            with st.spinner("🤖 AI is researching your question..."):[m
+[32m+[m[32m                try:[m
+[32m+[m[32m                    # Parse tickers if provided[m
+[32m+[m[32m                    tickers_list = [][m
+[32m+[m[32m                    if tickers_to_analyze.strip():[m
+[32m+[m[32m                        tickers_list = [t.strip().upper() for t in tickers_to_analyze.split(",") if t.strip()][m
+                     [m
+[31m-                    if predicted_price > resistance:[m
+[31m-                        prediction_text += "- Price prediction above resistance - breakout scenario\n"[m
+[31m-                    elif predicted_price < support:[m
+[31m-                        prediction_text += "- Price prediction below support - breakdown scenario\n"[m
+[32m+[m[32m                    # Build comprehensive analysis[m
+[32m+[m[32m                    analysis_data = {}[m
+                     [m
+[31m-                    prediction_text += "\n### Risk Considerations\n"[m
+[31m-                    prediction_text += f"- Historical volatility suggests {volatility/current_price*100:.1f}% daily price swings\n"[m
+[31m-                    prediction_text += "- Predictions become less reliable beyond 7-10 days\n"[m
+[31m-                    prediction_text += "- External factors (news, earnings, macro events) can invalidate technical predictions\n"[m
+[31m-                    prediction_text += "- Always use stop-loss orders to manage risk\n"[m
+[32m+[m[32m                    if tickers_list:[m
+[32m+[m[32m                        st.info(f"📊 Analyzing {len(tickers_list)} ticker(s)...")[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        for ticker in tickers_list:[m
+[32m+[m[32m                            with st.expander(f"📈 Data for {ticker}", expanded=False):[m
+[32m+[m[32m                                try:[m
+[32m+[m[32m                                    t = yf.Ticker(ticker)[m
+[32m+[m[32m                                    hist = t.history(period="3mo")[m
+[32m+[m[32m                                    info = getattr(t, "info", {}) or {}[m
+[32m+[m[41m                                    [m
+[32m+[m[32m                                    if hist is not None and not hist.empty:[m
+[32m+[m[32m                                        df = compute_indicators(hist)[m
+[32m+[m[32m                                        risk_score, risk_level, risk_breakdown = calculate_risk_score(df)[m
+[32m+[m[32m                                        signal = generate_signal(df)[m
+[32m+[m[41m                                        [m
+[32m+[m[32m                                        # Display quick metrics[m
+[32m+[m[32m                                        col1, col2, col3, col4 = st.columns(4)[m
+[32m+[m[32m                                        col1.metric("Price", f"${df['Close'].iloc[-1]:.2f}")[m
+[32m+[m[32m                                        col2.metric("Signal", signal)[m
+[32m+[m[32m                                        col3.metric("Risk", f"{risk_score}/100")[m
+[32m+[m[32m                                        col4.metric("RSI", f"{df['RSI'].iloc[-1]:.1f}")[m
+[32m+[m[41m                                        [m
+[32m+[m[32m                                        # Store data for AI[m
+[32m+[m[32m                                        analysis_data[ticker] = {[m
+[32m+[m[32m                                            "current_price": df['Close'].iloc[-1],[m
+[32m+[m[32m                                            "signal": signal,[m
+[32m+[m[32m                                            "risk_score": risk_score,[m
+[32m+[m[32m                                            "risk_level": risk_level,[m
+[32m+[m[32m                                            "rsi": df['RSI'].iloc[-1],[m
+[32m+[m[32m                                            "ema20": df['EMA20'].iloc[-1],[m
+[32m+[m[32m                                            "ema50": df['EMA50'].iloc[-1],[m
+[32m+[m[32m                                            "macd": df['MACD'].iloc[-1],[m
+[32m+[m[32m                                            "market_cap": info.get("marketCap", "N/A"),[m
+[32m+[m[32m                                            "pe_ratio": info.get("trailingPE", "N/A"),[m
+[32m+[m[32m                                            "52w_high": info.get("fiftyTwoWeekHigh", "N/A"),[m
+[32m+[m[32m                                            "52w_low": info.get("fiftyTwoWeekLow", "N/A"),[m
+[32m+[m[32m                                            "sector": info.get("sector", "N/A"),[m
+[32m+[m[32m                                            "industry": info.get("industry", "N/A")[m
+[32m+[m[32m                                        }[m
+[32m+[m[32m                                    else:[m
+[32m+[m[32m                                        st.warning(f"No data for {ticker}")[m
+[32m+[m[32m                                except Exception as e:[m
+[32m+[m[32m                                    st.error(f"Error fetching {ticker}: {e}")[m
+                     [m
+[31m-                    prediction_text += "\n### Recommended Strategy\n"[m
+[32m+[m[32m                    # Build AI prompt[m
+[32m+[m[32m                    st.markdown("---")[m
+[32m+[m[32m                    st.subheader("🤖 AI Analysis")[m
+                     [m
+[31m-                    if signal == "BUY":[m
+[31m-                        prediction_text += "- **Entry**: Consider positions near support levels\n"[m
+[31m-                        prediction_text += f"- **Stop Loss**: ${support * 0.97:.2f} (3% below support)\n"[m
+[31m-                        prediction_text += f"- **Target**: ${predicted_price:.2f}\n"[m
+[31m-                    elif signal == "SELL":[m
+[31m-                        prediction_text += "- **Action**: Consider reducing exposure or hedging\n"[m
+[31m-                        prediction_text += "- **Watch**: Breakdown below support could accelerate losses\n"[m
+[32m+[m[32m                    if depth == "Quick":[m
+[32m+[m[32m                        detail_instruction = "Provide a concise 3-4 paragraph analysis."[m
+[32m+[m[32m                    elif depth == "Detailed":[m
+[32m+[m[32m                        detail_instruction = "Provide a comprehensive analysis with clear sections and actionable insights."[m
+                     else:[m
+[31m-                        prediction_text += "- **Action**: Wait for clearer directional signals\n"[m
+[31m-                        prediction_text += "- **Monitor**: Key technical levels for breakout\n"[m
+[32m+[m[32m                        detail_instruction = "Provide an in-depth, research-grade analysis with detailed reasoning, multiple perspectives, and risk considerations."[m
+                     [m
+[31m-                    prediction_text += "\n---\n"[m
+[31m-                    prediction_text += "**Important**: This is a probabilistic forecast based on technical analysis. "[m
+[31m-                    prediction_text += "Markets can move differently due to unexpected events, news, or changes in fundamentals. "[m
+[31m-                    prediction_text += "Never invest based solely on predictions. Always conduct comprehensive research."[m
+[31m-                    [m
+[31m-                    st.markdown(prediction_text)[m
+[32m+[m[32m                    if analysis_data:[m
+[32m+[m[32m                        data_summary = "\n\n".join([[m
+[32m+[m[32m                            f"**{ticker}:**\n" +[m[41m [m
+[32m+[m[32m                            f"- Price: ${data['current_price']:.2f}\n" +[m
+[32m+[m[32m                            f"- Technical Signal: {data['signal']}\n" +[m
+[32m+[m[32m                            f"- Risk Score: {data['risk_score']}/100 ({data['risk_level']})\n" +[m
+[32m+[m[32m                            f"- RSI: {data['rsi']:.1f}\n" +[m
+[32m+[m[32m                            f"- EMA20: ${data['ema20']:.2f}, EMA50: ${data['ema50']:.2f}\n" +[m
+[32m+[m[32m                            f"- Market Cap: {data['market_cap']}\n" +[m
+[32m+[m[32m                            f"- P/E Ratio: {data['pe_ratio']}\n" +[m
+[32m+[m[32m                            f"- Sector: {data['sector']}, Industry: {data['industry']}\n"[m
+[32m+[m[32m                            for ticker, data in analysis_data.items()[m
+[32m+[m[32m                        ])[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        prompt = f"""You are a senior investment analyst and financial advisor. A client has asked: "{query}"[m
+[32m+[m
+[32m+[m[32mI've gathered real-time market data for the following stocks:[m
+[32m+[m
+[32m+[m[32m{data_summary}[m
+[32m+[m
+[32m+[m[32m{detail_instruction}[m
+[32m+[m
+[32m+[m[32mPlease provide:[m
+[32m+[m[32m1. **Direct Answer** to the question[m
+[32m+[m[32m2. **Stock Recommendations** with specific tickers and reasoning[m
+[32m+[m[32m3. **Risk Assessment** for each recommendation[m
+[32m+[m[32m4. **Entry/Exit Strategy** if applicable[m
+[32m+[m[32m5. **Key Catalysts** to watch[m
+[32m+[m[32m6. **Alternative Options** if relevant[m
+[32m+[m[32m7. **Important Disclaimers** and risks[m
+[32m+[m
+[32m+[m[32mUse the actual data provided above. Be specific, actionable, and honest about uncertainties."""[m
+[32m+[m[32m                    else:[m
+[32m+[m[32m                        prompt = f"""You are a senior investment analyst and financial advisor. A client has asked: "{query}"[m
+[32m+[m
+[32m+[m[32m{detail_instruction}[m
+[32m+[m
+[32m+[m[32mPlease provide:[m
+[32m+[m[32m1. **Direct Answer** to the question[m
+[32m+[m[32m2. **Stock Recommendations** with specific reasoning (suggest 3-5 tickers if applicable)[m
+[32m+[m[32m3. **Analysis Framework** - what factors to consider[m
+[32m+[m[32m4. **Risk Considerations**[m[41m [m
+[32m+[m[32m5. **Market Context** - current market conditions relevant to this question[m
+[32m+[m[32m6. **Action Plan** - concrete steps the investor should take[m
+[32m+[m[32m7. **Important Disclaimers**[m
+[32m+[m
+[32m+[m[32mBe specific, provide ticker symbols where relevant, and explain your reasoning clearly."""[m
+                     [m
+[31m-                    # Visualization[m
+[31m-                    st.subheader("📉 Price Projection Visualization")[m
+[32m+[m[32m                    with st.spinner("🧠 Generating comprehensive analysis..."):[m
+[32m+[m[32m                        ai_response = ask_gemini(prompt)[m
+                     [m
+[31m-                    future_dates = pd.date_range(start=hist.index[-1], periods=days+1, freq='D')[1:][m
+[32m+[m[32m                    st.markdown(ai_response)[m
+                     [m
+[31m-                    fig_pred = go.Figure()[m
+[32m+[m[32m                    # Add disclaimer[m
+[32m+[m[32m                    st.warning("⚠️ **Disclaimer**: This is AI-generated analysis based on current data. Always conduct your own research and consult with a licensed financial advisor before making investment decisions.")[m
+                     [m
+[31m-                    # Historical prices[m
+[31m-                    fig_pred.add_trace(go.Scatter([m
+[31m-                        x=hist.index[-30:],[m
+[31m-                        y=hist["Close"].tail(30),[m
+[31m-                        mode="lines",[m
+[31m-                        name="Historical",[m
+[31m-                        line=dict(color="blue", width=2)[m
+[31m-                    ))[m
+[32m+[m[32m                    # Save query option[m
+[32m+[m[32m                    if st.button("💾 Save this analysis"):[m
+[32m+[m[32m                        st.success("✅ Analysis saved! (Feature coming soon - will save to local database)")[m
+                     [m
+[31m-                    # Predicted price[m
+[31m-                    pred_line = [current_price] + [predicted_price] * days[m
+[31m-                    dates_pred = [hist.index[-1]] + list(future_dates)[m
+[32m+[m[32m                except Exception as e:[m
+[32m+[m[32m                    st.error(f"❌ Error during research: {e}")[m
+[32m+[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32m# Page: Market Screener (NEW)[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32melif page == "📊 Market Screener":[m
+[32m+[m[32m    st.header("📊 Market Screener")[m
+[32m+[m[32m    st.markdown("Find stocks matching your criteria with real-time technical analysis")[m
+[32m+[m[41m    [m
+[32m+[m[32m    st.markdown("### 🎯 Screening Criteria")[m
+[32m+[m[41m    [m
+[32m+[m[32m    col1, col2 = st.columns(2)[m
+[32m+[m[41m    [m
+[32m+[m[32m    with col1:[m
+[32m+[m[32m        st.markdown("**📈 Technical Filters**")[m
+[32m+[m[32m        rsi_min = st.slider("Min RSI", 0, 100, 30, help="Find oversold (30) or overbought (70) stocks")[m
+[32m+[m[32m        rsi_max = st.slider("Max RSI", 0, 100, 70)[m
+[32m+[m[41m        [m
+[32m+[m[32m        signal_filter = st.multiselect([m
+[32m+[m[32m            "Trading Signal",[m
+[32m+[m[32m            ["BUY", "SELL", "HOLD"],[m
+[32m+[m[32m            default=["BUY"],[m
+[32m+[m[32m            help="Filter by EMA crossover signal"[m
+[32m+[m[32m        )[m
+[32m+[m[41m    [m
+[32m+[m[32m    with col2:[m
+[32m+[m[32m        st.markdown("**⚠️ Risk Filters**")[m
+[32m+[m[32m        risk_max = st.slider("Max Risk Score", 0, 100, 60, help="Filter out high-risk stocks")[m
+[32m+[m[41m        [m
+[32m+[m[32m        sectors = st.multiselect([m
+[32m+[m[32m            "Sectors (optional)",[m
+[32m+[m[32m            ["Technology", "Healthcare", "Finance", "Energy", "Consumer", "Industrial"],[m
+[32m+[m[32m            help="Leave empty for all sectors"[m
+[32m+[m[32m        )[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Stock universe[m
+[32m+[m[32m    st.markdown("### 📋 Stock Universe")[m
+[32m+[m[41m    [m
+[32m+[m[32m    preset = st.radio([m
+[32m+[m[32m        "Choose preset or custom:",[m
+[32m+[m[32m        ["🇺🇸 US Top 50", "🇮🇳 Indian Nifty 50", "💎 Custom List"],[m
+[32m+[m[32m        horizontal=True[m
+[32m+[m[32m    )[m
+[32m+[m[41m    [m
+[32m+[m[32m    if preset == "🇺🇸 US Top 50":[m
+[32m+[m[32m        stock_universe = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK.B", "JPM", "JNJ",[m
+[32m+[m[32m                         "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "NFLX", "ADBE", "CRM",[m
+[32m+[m[32m                         "INTC", "CSCO", "PFE", "KO", "PEP", "ABT", "TMO", "COST", "AVGO", "ACN"][m
+[32m+[m[32m    elif preset == "🇮🇳 Indian Nifty 50":[m
+[32m+[m[32m        stock_universe = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "HINDUNILVR.NS",[m[41m [m
+[32m+[m[32m                         "ICICIBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "KOTAKBANK.NS",[m
+[32m+[m[32m                         "LT.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS", "TITAN.NS",[m
+[32m+[m[32m                         "WIPRO.NS", "HCLTECH.NS", "ULTRACEMCO.NS", "BAJFINANCE.NS", "NESTLEIND.NS"][m
+[32m+[m[32m    else:[m
+[32m+[m[32m        custom_input = st.text_area([m
+[32m+[m[32m            "Enter tickers (comma-separated)",[m
+[32m+[m[32m            "AAPL,MSFT,GOOGL,TSLA",[m
+[32m+[m[32m            help="Enter tickers with proper suffix (e.g., .NS for India)"[m
+[32m+[m[32m        )[m
+[32m+[m[32m        stock_universe = [t.strip().upper() for t in custom_input.split(",") if t.strip()][m
+[32m+[m[41m    [m
+[32m+[m[32m    st.info(f"📊 Will screen {len(stock_universe)} stocks")[m
+[32m+[m[41m    [m
+[32m+[m[32m    if st.button("🔍 Run Screener", type="primary", use_container_width=True):[m
+[32m+[m[32m        with st.spinner(f"Screening {len(stock_universe)} stocks... This may take a minute..."):[m
+[32m+[m[32m            results = [][m
+[32m+[m[32m            progress_bar = st.progress(0)[m
+[32m+[m[41m            [m
+[32m+[m[32m            for idx, ticker in enumerate(stock_universe):[m
+[32m+[m[32m                try:[m
+[32m+[m[32m                    t = yf.Ticker(ticker)[m
+[32m+[m[32m                    hist = t.history(period="3mo")[m
+                     [m
+[31m-                    fig_pred.add_trace(go.Scatter([m
+[31m-                        x=dates_pred,[m
+[31m-                        y=pred_line,[m
+[31m-                        mode="lines",[m
+[31m-                        name="Prediction",[m
+[31m-                        line=dict(color="green", width=2, dash="dash")[m
+[31m-                    ))[m
+[32m+[m[32m                    if hist is not None and not hist.empty and len(hist) > 50:[m
+[32m+[m[32m                        df = compute_indicators(hist)[m
+[32m+[m[32m                        risk_score, risk_level, _ = calculate_risk_score(df)[m
+[32m+[m[32m                        signal = generate_signal(df)[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        current_rsi = df['RSI'].iloc[-1][m
+[32m+[m[32m                        current_price = df['Close'].iloc[-1][m
+[32m+[m[41m                        [m
+[32m+[m[32m                        # Apply filters[m
+[32m+[m[32m                        if (rsi_min <= current_rsi <= rsi_max and[m[41m [m
+[32m+[m[32m                            signal in signal_filter and[m[41m [m
+[32m+[m[32m                            risk_score <= risk_max):[m
+[32m+[m[41m                            [m
+[32m+[m[32m                            info = getattr(t, "info", {}) or {}[m
+[32m+[m[41m                            [m
+[32m+[m[32m                            results.append({[m
+[32m+[m[32m                                "Ticker": ticker,[m
+[32m+[m[32m                                "Price": f"${current_price:.2f}",[m
+[32m+[m[32m                                "Signal": signal,[m
+[32m+[m[32m                                "RSI": f"{current_rsi:.1f}",[m
+[32m+[m[32m                                "Risk": f"{risk_score:.0f}",[m
+[32m+[m[32m                                "Risk Level": risk_level,[m
+[32m+[m[32m                                "Sector": info.get("sector", "N/A"),[m
+[32m+[m[32m                                "Market Cap": info.get("marketCap", 0)[m
+[32m+[m[32m                            })[m
+                     [m
+[31m-                    # Confidence intervals[m
+[31m-                    upper_line = [current_price] + [upper_bound] * days[m
+[31m-                    lower_line = [current_price] + [lower_bound] * days[m
+[32m+[m[32m                    progress_bar.progress((idx + 1) / len(stock_universe))[m
+                     [m
+[31m-                    fig_pred.add_trace(go.Scatter([m
+[31m-                        x=dates_pred,[m
+[31m-                        y=upper_line,[m
+[31m-                        mode="lines",[m
+[31m-                        name="Upper Bound",[m
+[31m-                        line=dict(color="red", width=1, dash="dot")[m
+[31m-                    ))[m
+[32m+[m[32m                except Exception:[m
+[32m+[m[32m                    continue[m
+[32m+[m[41m            [m
+[32m+[m[32m            progress_bar.empty()[m
+[32m+[m[41m            [m
+[32m+[m[32m            if results:[m
+[32m+[m[32m                st.success(f"✅ Found {len(results)} stocks matching your criteria!")[m
+[32m+[m[41m                [m
+[32m+[m[32m                results_df = pd.DataFrame(results)[m
+[32m+[m[41m                [m
+[32m+[m[32m                # Sort by Risk Score (ascending)[m
+[32m+[m[32m                results_df = results_df.sort_values("Risk", ascending=True)[m
+[32m+[m[41m                [m
+[32m+[m[32m                st.dataframe(results_df, use_container_width=True, hide_index=True)[m
+[32m+[m[41m                [m
+[32m+[m[32m                # AI Summary[m
+[32m+[m[32m                st.markdown("---")[m
+[32m+[m[32m                st.subheader("🤖 AI Screening Summary")[m
+[32m+[m[41m                [m
+[32m+[m[32m                top_picks = results_df.head(5)['Ticker'].tolist()[m
+[32m+[m[41m                [m
+[32m+[m[32m                prompt = f"""Based on a technical screening of stocks, these {len(results)} stocks passed the following criteria:[m
+[32m+[m[32m- RSI between {rsi_min} and {rsi_max}[m
+[32m+[m[32m- Trading signals: {', '.join(signal_filter)}[m
+[32m+[m[32m- Maximum risk score: {risk_max}[m
+[32m+[m
+[32m+[m[32mTop 5 picks from screening: {', '.join(top_picks)}[m
+[32m+[m
+[32m+[m[32mPlease provide:[m
+[32m+[m[32m1. **Overview** of what these criteria mean[m
+[32m+[m[32m2. **Analysis of top 3 picks** - why they stand out[m
+[32m+[m[32m3. **Investment strategy** for these stocks[m
+[32m+[m[32m4. **Risks to consider**[m
+[32m+[m[32m5. **Next steps** for investors[m
+[32m+[m
+[32m+[m[32mBe concise but insightful."""[m
+[32m+[m[41m                [m
+[32m+[m[32m                with st.spinner("Getting AI insights..."):[m
+[32m+[m[32m                    ai_summary = ask_gemini(prompt)[m
+[32m+[m[41m                [m
+[32m+[m[32m                st.markdown(ai_summary)[m
+[32m+[m[41m                [m
+[32m+[m[32m            else:[m
+[32m+[m[32m                st.warning("⚠️ No stocks found matching your criteria. Try adjusting the filters.")[m
+[32m+[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32m# Page: Compare Stocks (NEW)[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32melif page == "📚 Compare Stocks":[m
+[32m+[m[32m    st.header("📚 Side-by-Side Stock Comparison")[m
+[32m+[m[32m    st.markdown("Compare multiple stocks across all key metrics")[m
+[32m+[m[41m    [m
+[32m+[m[32m    col1, col2 = st.columns(2)[m
+[32m+[m[41m    [m
+[32m+[m[32m    with col1:[m
+[32m+[m[32m        ticker1 = st.text_input("Stock 1", "AAPL", key="comp1").upper()[m
+[32m+[m[32m    with col2:[m
+[32m+[m[32m        ticker2 = st.text_input("Stock 2", "MSFT", key="comp2").upper()[m
+[32m+[m[41m    [m
+[32m+[m[32m    col3, col4 = st.columns(2)[m
+[32m+[m[32m    with col3:[m
+[32m+[m[32m        ticker3 = st.text_input("Stock 3 (optional)", "", key="comp3").upper()[m
+[32m+[m[32m    with col4:[m
+[32m+[m[32m        ticker4 = st.text_input("Stock 4 (optional)", "", key="comp4").upper()[m
+[32m+[m[41m    [m
+[32m+[m[32m    compare_period = st.selectbox("Comparison Period", ["1mo", "3mo", "6mo", "1y"], index=1)[m
+[32m+[m[41m    [m
+[32m+[m[32m    if st.button("📊 Compare", type="primary", use_container_width=True):[m
+[32m+[m[32m        tickers = [t for t in [ticker1, ticker2, ticker3, ticker4] if t][m
+[32m+[m[41m        [m
+[32m+[m[32m        if len(tickers) < 2:[m
+[32m+[m[32m            st.error("❌ Please enter at least 2 tickers to compare")[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            comparison_data = [][m
+[32m+[m[32m            price_history = {}[m
+[32m+[m[41m            [m
+[32m+[m[32m            with st.spinner(f"Analyzing {len(tickers)} stocks..."):[m
+[32m+[m[32m                for ticker in tickers:[m
+[32m+[m[32m                    try:[m
+[32m+[m[32m                        t = yf.Ticker(ticker)[m
+[32m+[m[32m                        hist = t.history(period=compare_period)[m
+[32m+[m[32m                        info = getattr(t, "info", {}) or {}[m
+[32m+[m[41m                        [m
+[32m+[m[32m                        if hist is not None and not hist.empty:[m
+[32m+[m[32m                            df = compute_indicators(hist)[m
+[32m+[m[32m                            risk_score, risk_level, _ = calculate_risk_score(df)[m
+[32m+[m[32m                            signal = generate_signal(df)[m
+[32m+[m[41m                            [m
+[32m+[m[32m                            # Calculate returns[m
+[32m+[m[32m                            start_price = hist['Close'].iloc[0][m
+[32m+[m[32m                            end_price = hist['Close'].iloc[-1][m
+[32m+[m[32m                            returns = ((end_price - start_price) / start_price) * 100[m
+[32m+[m[41m                            [m
+[32m+[m[32m                            price_history[ticker] = hist['Close'][m
+[32m+[m[41m                            [m
+[32m+[m[32m                            comparison_data.append({[m
+[32m+[m[32m                                "Ticker": ticker,[m
+[32m+[m[32m                                "Price": f"${end_price:.2f}",[m
+[32m+[m[32m                                f"{compare_period} Return": f"{returns:+.2f}%",[m
+[32m+[m[32m                                "Signal": signal,[m
+[32m+[m[32m                                "RSI": f"{df['RSI'].iloc[-1]:.1f}",[m
+[32m+[m[32m                                "Risk Score": f"{risk_score:.0f}/100",[m
+[32m+[m[32m                                "Risk Level": risk_level,[m
+[32m+[m[32m                                "Market Cap": info.get("marketCap", "N/A"),[m
+[32m+[m[32m                                "P/E Ratio": info.get("trailingPE", "N/A"),[m
+[32m+[m[32m                                "Sector": info.get("sector", "N/A"),[m
+[32m+[m[32m                                "52W High": info.get("fiftyTwoWeekHigh", "N/A"),[m
+[32m+[m[32m                                "52W Low": info.get("fiftyTwoWeekLow", "N/A")[m
+[32m+[m[32m                            })[m
+[32m+[m[32m                    except Exception as e:[m
+[32m+[m[32m                        st.error(f"Error analyzing {ticker}: {e}")[m
+[32m+[m[41m            [m
+[32m+[m[32m            if comparison_data:[m
+[32m+[m[32m                # Comparison table[m
+[32m+[m[32m                st.subheader("📊 Comparison Table")[m
+[32m+[m[32m                comp_df = pd.DataFrame(comparison_data)[m
+[32m+[m[32m                st.dataframe(comp_df, use_container_width=True, hide_index=True)[m
+[32m+[m[41m                [m
+[32m+[m[32m                # Price comparison chart[m
+[32m+[m[32m                st.subheader("📈 Price Performance Comparison")[m
+[32m+[m[41m                [m
+[32m+[m[32m                if price_history:[m
+[32m+[m[32m                    fig = go.Figure()[m
+                     [m
+[31m-                    fig_pred.add_trace(go.Scatter([m
+[31m-                        x=dates_pred,[m
+[31m-                        y=lower_line,[m
+[31m-                        mode="lines",[m
+[31m-                        name="Lower Bound",[m
+[31m-                        line=dict(color="red", width=1, dash="dot"),[m
+[31m-                        fill='tonexty',[m
+[31m-                        fillcolor='rgba(255,0,0,0.1)'[m
+[31m-                    ))[m
+[32m+[m[32m                    for ticker, prices in price_history.items():[m
+[32m+[m[32m                        # Normalize to 100 for fair comparison[m
+[32m+[m[32m                        normalized = (prices / prices.iloc[0]) * 100[m
+[32m+[m[32m                        fig.add_trace(go.Scatter([m
+[32m+[m[32m                            x=normalized.index,[m
+[32m+[m[32m                            y=normalized,[m
+[32m+[m[32m                            mode="lines",[m
+[32m+[m[32m                            name=ticker,[m
+[32m+[m[32m                            line=dict(width=3)[m
+[32m+[m[32m                        ))[m
+                     [m
+[31m-                    fig_pred.update_layout([m
+[32m+[m[32m                    fig.update_layout([m
+                         template="plotly_dark",[m
+                         height=450,[m
+                         xaxis_title="Date",[m
+[31m-                        yaxis_title="Price ($)",[m
+[31m-                        hovermode="x unified"[m
+[32m+[m[32m                        yaxis_title="Normalized Price (Base = 100)",[m
+[32m+[m[32m                        hovermode="x unified",[m
+[32m+[m[32m                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)[m
+                     )[m
+                     [m
+[31m-                    st.plotly_chart(fig_pred, use_container_width=True)[m
+[31m-                    [m
+[31m-                    st.warning("**Risk Warning**: Past performance does not guarantee future results. This prediction is for educational purposes only.")[m
+[31m-                    [m
+[32m+[m[32m                    st.plotly_chart(fig, use_container_width=True)[m
+[32m+[m[41m                [m
+[32m+[m[32m                # AI Comparison[m
+[32m+[m[32m                st.markdown("---")[m
+[32m+[m[32m                st.subheader("🤖 AI Comparison Analysis")[m
+[32m+[m[41m                [m
+[32m+[m[32m                comparison_summary = "\n".join([[m
+[32m+[m[32m                    f"**{row['Ticker']}:** Price ${row['Price']}, {compare_period} Return: {row[f'{compare_period} Return']}, "[m
+[32m+[m[32m                    f"Signal: {row['Signal']}, Risk: {row['Risk Score']}, P/E: {row['P/E Ratio']}, Sector: {row['Sector']}"[m
+[32m+[m[32m                    for row in comparison_data[m
+[32m+[m[32m                ])[m
+[32m+[m[41m                [m
+[32m+[m[32m                prompt = f"""Compare these stocks for investment decision:[m
+[32m+[m
+[32m+[m[32m{comparison_summary}[m
+[32m+[m
+[32m+[m[32mProvide a comprehensive comparison including:[m
+[32m+[m[32m1. **Winner Analysis** - Which stock is the best choice and why?[m
+[32m+[m[32m2. **Strengths & Weaknesses** of each stock[m
+[32m+[m[32m3. **Risk Comparison** - Which is safest/riskiest?[m
+[32m+[m[32m4. **Investment Scenarios** - Which stock for which type of investor?[m
+[32m+[m[32m5. **Key Differentiators** - What sets each apart?[m
+[32m+[m[32m6. **Final Recommendation** with reasoning[m
+[32m+[m
+[32m+[m[32mBe specific and actionable. Consider both technical and fundamental factors."""[m
+[32m+[m[41m                [m
+[32m+[m[32m                with st.spinner("🤖 Generating comparison insights..."):[m
+[32m+[m[32m                    ai_comparison = ask_gemini(prompt)[m
+[32m+[m[41m                [m
+[32m+[m[32m                st.markdown(ai_comparison)[m
+[32m+[m[41m                [m
+[32m+[m[32m                st.info("💡 **Tip**: Use this comparison to make informed decisions based on your investment goals and risk tolerance.")[m
+[32m+[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32m# Page: Settings[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32melif page == "⚙️ Settings":[m
+[32m+[m[32m    st.header("⚙️ Settings & Diagnostics")[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Gemini Configuration[m
+[32m+[m[32m    st.subheader("🤖 Gemini AI Configuration")[m
+[32m+[m[41m    [m
+[32m+[m[32m    col1, col2 = st.columns(2)[m
+[32m+[m[41m    [m
+[32m+[m[32m    with col1:[m
+[32m+[m[32m        st.write("**Status:**")[m
+[32m+[m[32m        if GENAI_AVAILABLE:[m
+[32m+[m[32m            st.success("✅ google-generativeai installed")[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            st.error("❌ google-generativeai not installed")[m
+[32m+[m[32m            st.code("pip install google-generativeai")[m
+[32m+[m[41m        [m
+[32m+[m[32m        if GOOGLE_API_KEY:[m
+[32m+[m[32m            st.success(f"✅ API Key configured (length: {len(GOOGLE_API_KEY)})")[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            st.warning("⚠️ No API key found in secrets")[m
+[32m+[m[41m    [m
+[32m+[m[32m    with col2:[m
+[32m+[m[32m        st.write("**Current Model:**")[m
+[32m+[m[32m        if MODEL_NAME:[m
+[32m+[m[32m            st.code(MODEL_NAME)[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            st.error("No model detected")[m
+[32m+[m[41m    [m
+[32m+[m[32m    if st.button("🔍 List Available Models"):[m
+[32m+[m[32m        if not GENAI_AVAILABLE:[m
+[32m+[m[32m            st.error("❌ google-generativeai not installed")[m
+[32m+[m[32m        elif not GOOGLE_API_KEY:[m
+[32m+[m[32m            st.error("❌ API key not configured")[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            try:[m
+[32m+[m[32m                with st.spinner("Fetching models..."):[m
+[32m+[m[32m                    models = genai.list_models()[m
+[32m+[m[32m                    model_list = [m.name for m in models][m
+[32m+[m[32m                    st.write(f"Found {len(model_list)} models:")[m
+[32m+[m[32m                    st.json(model_list)[m
+[32m+[m[32m            except Exception as e:[m
+[32m+[m[32m                st.error(f"❌ Error listing models: {e}")[m
+[32m+[m[41m    [m
+[32m+[m[32m    st.markdown("---")[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Database Management[m
+[32m+[m[32m    st.subheader("💾 Database Management")[m
+[32m+[m[41m    [m
+[32m+[m[32m    df = list_positions_db()[m
+[32m+[m[32m    st.write(f"**Current Positions:** {len(df)}")[m
+[32m+[m[32m    st.write(f"**Database Path:** `{DB_PATH}`")[m
+[32m+[m[41m    [m
+[32m+[m[32m    col1, col2 = st.columns(2)[m
+[32m+[m[41m    [m
+[32m+[m[32m    with col1:[m
+[32m+[m[32m        if st.button("🗑️ Clear All Positions", type="primary"):[m
+[32m+[m[32m            c = conn.cursor()[m
+[32m+[m[32m            c.execute("DELETE FROM portfolio")[m
+[32m+[m[32m            conn.commit()[m
+[32m+[m[32m            st.success("✅ Portfolio cleared successfully!")[m
+[32m+[m[32m            time.sleep(1)[m
+[32m+[m[32m            st.rerun()[m
+[32m+[m[41m    [m
+[32m+[m[32m    with col2:[m
+[32m+[m[32m        if st.button("📊 Show Database Stats"):[m
+[32m+[m[32m            c = conn.cursor()[m
+[32m+[m[32m            c.execute("SELECT COUNT(*) as count, SUM(qty) as total_qty FROM portfolio")[m
+[32m+[m[32m            stats = c.fetchone()[m
+[32m+[m[32m            st.write(f"- Total Positions: {stats[0]}")[m
+[32m+[m[32m            st.write(f"- Total Shares: {stats[1]}")[m
+[32m+[m[41m    [m
+[32m+[m[32m    st.markdown("---")[m
+[32m+[m[41m    [m
+[32m+[m[32m    # System Information[m
+[32m+[m[32m    st.subheader("ℹ️ System Information")[m
+[32m+[m[41m    [m
+[32m+[m[32m    info_data = {[m
+[32m+[m[32m        "Python Packages": ["streamlit", "yfinance", "pandas", "numpy", "plotly"],[m
+[32m+[m[32m        "Database": DB_PATH,[m
+[32m+[m[32m        "Authenticated": st.session_state.authenticated,[m
+[32m+[m[32m        "Auto-refresh": f"{refresh_auto}s" if refresh_auto > 0 else "Disabled"[m
+[32m+[m[32m    }[m
+[32m+[m[41m    [m
+[32m+[m[32m    for key, value in info_data.items():[m
+[32m+[m[32m        st.write(f"**{key}:** {value}")[m
+[32m+[m[41m    [m
+[32m+[m[32m    st.markdown("---")[m
+[32m+[m[41m    [m
+[32m+[m[32m    # API Testing[m
+[32m+[m[32m    st.subheader("🧪 API Testing")[m
+[32m+[m[41m    [m
+[32m+[m[32m    test_ticker = st.text_input("Test Ticker", "AAPL")[m
+[32m+[m[41m    [m
+[32m+[m[32m    if st.button("🧪 Test Yahoo Finance API"):[m
+[32m+[m[32m        with st.spinner(f"Testing {test_ticker}..."):[m
+[32m+[m[32m            try:[m
+[32m+[m[32m                t = yf.Ticker(test_ticker)[m
+[32m+[m[32m                data = t.history(period="1d")[m
+[32m+[m[32m                if data is not None and not data.empty:[m
+[32m+[m[32m                    st.success("✅ Yahoo Finance API working")[m
+[32m+[m[32m                    st.write("Latest data:")[m
+[32m+[m[32m                    st.dataframe(data.tail(1))[m
+[32m+[m[32m                else:[m
+[32m+[m[32m                    st.error("❌ No data returned")[m
+             except Exception as e:[m
+[31m-                st.error(f"Error generating prediction: {e}")[m
+\ No newline at end of file[m
+[32m+[m[32m                st.error(f"❌ API Error: {e}")[m
+[32m+[m[41m    [m
+[32m+[m[32m    if st.button("🧪 Test Gemini API"):[m
+[32m+[m[32m        with st.spinner("Testing Gemini..."):[m
+[32m+[m[32m            response = ask_gemini("Respond with 'API working' if you receive this.")[m
+[32m+[m[32m            st.write("**Response:**")[m
+[32m+[m[32m            st.write(response)[m
+[32m+[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32m# Footer[m
+[32m+[m[32m# ---------------------------[m
+[32m+[m[32mst.markdown("---")[m
+[32m+[m[32mst.markdown("""[m
+[32m+[m[32m<div style='text-align: center; color: #666; padding: 20px;'>[m
+[32m+[m[32m    <p><strong>AI Investment Buddy</strong> — Built by Suhas</p>[m
+[32m+[m[32m    <p>🗄️ Local SQLite persistence enabled | 🤖 Powered by Gemini AI</p>[m
+[32m+[m[32m    <p style='font-size: 0.8em;'>⚠️ For educational purposes only. Not financial advice.</p>[m
+[32m+[m[32m</div>[m
+[32m+[m[32m""", unsafe_allow_html=True)[m
+\ No newline at end of file[m
+[1mdiff --git a/requirements.txt b/requirements.txt[m
+[1mindex 766b0341..f89f3091 100644[m
+[1m--- a/requirements.txt[m
+[1m+++ b/requirements.txt[m
+[36m@@ -1,7 +1,6 @@[m
+[31m-   streamlit[m
+[31m-   yfinance[m
+[31m-   pandas[m
+[31m-   numpy[m
+[31m-   plotly[m
+[31m-   textblob[m
+[31m-   [m
+\ No newline at end of file[m
+[32m+[m[32mstreamlit>=1.28.0[m
+[32m+[m[32myfinance>=0.2.28[m
+[32m+[m[32mpandas>=2.0.0[m
+[32m+[m[32mnumpy>=1.24.0[m
+[32m+[m[32mplotly>=5.17.0[m
+[32m+[m[32mgoogle-generativeai>=0.3.2[m
