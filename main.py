@@ -356,37 +356,33 @@ def generate_signal(df):
         return "N/A"
 
 def calculate_risk_score(df):
-    """
-    Calculate quantitative risk score (0–100)
-    Returns:
-    - total_risk
-    - risk_level
-    - risk_table (DataFrame)
-    """
-
+    """Calculate quantitative risk score (0-100)"""
     try:
         if df is None or df.empty or len(df) < 30:
-            return 50, "Insufficient data", pd.DataFrame()
+            return 50, "Insufficient data", {}
+        
+        risk_components = {}
+        """
+    Calculate a quantitative risk score (0-100) based on technical indicators
+    Higher score = Higher risk
+    
+    Factors:
+    - Volatility (30%): Higher volatility = higher risk
+    - RSI extremes (20%): Overbought/oversold = higher risk
+    - Price momentum (20%): Declining trend = higher risk
+    - MACD divergence (15%): Weak momentum = higher risk
+    - Volume trend (15%): Declining volume = higher risk
+    """
 
-        rows = []
-
-        # 1. Volatility Risk (Max 30)
+        
+        # 1. Volatility Risk (30 points)
         returns = df['Close'].pct_change().dropna()
         volatility = returns.std() * np.sqrt(252)
         vol_risk = min(volatility * 100, 30)
-
-        rows.append([
-            "Volatility",
-            "Annualized price fluctuation",
-            round(volatility, 4),
-            "High volatility ⇒ unstable price",
-            30,
-            round(vol_risk, 1)
-        ])
-
-        # 2. RSI Risk (Max 20)
+        risk_components['Volatility'] = round(vol_risk, 1)
+        
+        # 2. RSI Risk (20 points)
         current_rsi = df['RSI'].iloc[-1]
-
         if pd.isna(current_rsi):
             rsi_risk = 10
         elif current_rsi > 70:
@@ -395,21 +391,13 @@ def calculate_risk_score(df):
             rsi_risk = 20 * (30 - current_rsi) / 30
         else:
             rsi_risk = 5
-
-        rows.append([
-            "RSI Extremes",
-            "Overbought / Oversold pressure",
-            round(current_rsi, 2),
-            "Extreme RSI ⇒ reversal risk",
-            20,
-            round(rsi_risk, 1)
-        ])
-
-        # 3. Momentum Risk (Max 20)
+        risk_components['RSI'] = round(rsi_risk, 1)
+        
+        # 3. Price Momentum Risk (20 points)
         recent_avg = df['Close'].tail(5).mean()
         month_avg = df['Close'].tail(30).mean()
         momentum_change = (recent_avg - month_avg) / month_avg
-
+        
         if momentum_change < -0.05:
             momentum_risk = 20
         elif momentum_change < 0:
@@ -418,80 +406,45 @@ def calculate_risk_score(df):
             momentum_risk = 5
         else:
             momentum_risk = 8
-
-        rows.append([
-            "Price Momentum",
-            "Short-term vs medium-term trend",
-            round(momentum_change * 100, 2),
-            "Falling momentum ⇒ downside risk",
-            20,
-            round(momentum_risk, 1)
-        ])
-
-        # 4. MACD Risk (Max 15)
-        macd = df['MACD'].iloc[-1]
-        signal = df['Signal'].iloc[-1]
-
-        if pd.isna(macd) or pd.isna(signal):
+        risk_components['Momentum'] = round(momentum_risk, 1)
+        
+        # 4. MACD Risk (15 points)
+        current_macd = df['MACD'].iloc[-1]
+        current_signal = df['Signal'].iloc[-1]
+        
+        if pd.isna(current_macd) or pd.isna(current_signal):
             macd_risk = 7.5
         else:
-            diff = macd - signal
-            if diff < 0:
+            macd_diff = current_macd - current_signal
+            if macd_diff < 0:
                 macd_risk = 15
-            elif abs(diff) < 0.5:
+            elif abs(macd_diff) < 0.5:
                 macd_risk = 10
             else:
                 macd_risk = 5
-
-        rows.append([
-            "MACD Strength",
-            "Momentum confirmation",
-            round(macd - signal, 3),
-            "Weak MACD ⇒ trend uncertainty",
-            15,
-            round(macd_risk, 1)
-        ])
-
-        # 5. Volume Risk (Max 15)
-        if "Volume" in df.columns:
+        risk_components['MACD'] = round(macd_risk, 1)
+        
+        # 5. Volume Risk (15 points)
+        if 'Volume' in df.columns:
             recent_vol = df['Volume'].tail(5).mean()
             avg_vol = df['Volume'].tail(30).mean()
-            ratio = recent_vol / avg_vol if avg_vol > 0 else 1
-
-            if ratio < 0.7:
-                volume_risk = 15
-            elif ratio < 0.9:
-                volume_risk = 10
+            
+            if avg_vol > 0:
+                vol_ratio = recent_vol / avg_vol
+                if vol_ratio < 0.7:
+                    volume_risk = 15
+                elif vol_ratio < 0.9:
+                    volume_risk = 10
+                else:
+                    volume_risk = 5
             else:
-                volume_risk = 5
+                volume_risk = 7.5
         else:
-            ratio = None
             volume_risk = 7.5
-
-        rows.append([
-            "Volume Trend",
-            "Participation strength",
-            round(ratio, 2) if ratio else "N/A",
-            "Low volume ⇒ weak conviction",
-            15,
-            round(volume_risk, 1)
-        ])
-
-        # ---------- FINAL ----------
-        risk_table = pd.DataFrame(
-            rows,
-            columns=[
-                "Risk Factor",
-                "What it Measures",
-                "Current Value",
-                "Why it Matters",
-                "Max Points",
-                "Risk Contribution"
-            ]
-        )
-
-        total_risk = risk_table["Risk Contribution"].sum()
-
+        risk_components['Volume'] = round(volume_risk, 1)
+        
+        total_risk = sum(risk_components.values())
+        
         if total_risk < 30:
             risk_level = "Low Risk"
         elif total_risk < 50:
@@ -500,20 +453,19 @@ def calculate_risk_score(df):
             risk_level = "High Risk"
         else:
             risk_level = "Very High Risk"
-
-        return round(total_risk, 1), risk_level, risk_table
-
+        
+        return round(total_risk, 1), risk_level, risk_components
+        
     except Exception as e:
-        return 50, "Calculation Error", pd.DataFrame({"Error": [str(e)]})
-
+        return 50, "Calculation Error", {"Error": str(e)}
 
 # ---------------------------
 # Page Configuration
 # ---------------------------
 st.set_page_config(
-    page_title="Quantscope",
+    page_title="Professional Investment Platform",
     layout="wide",
-    page_icon="",
+    page_icon="📊",
     initial_sidebar_state="expanded"
 )
 
