@@ -506,6 +506,7 @@ def calculate_risk_score(df):
     except Exception as e:
         return 50, "Calculation Error", pd.DataFrame({"Error": [str(e)]})
 
+
 # ---------------------------
 # Page Configuration
 # ---------------------------
