@@ -271,20 +271,50 @@ def list_positions_db():
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
 
 # ---------------------------
-# Helper Functions
+# Helper Functions with Rate Limiting
 # ---------------------------
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)  # Cache for 5 minutes
 def get_current_price(ticker):
     """Fetch current price for a ticker"""
     try:
+        time.sleep(0.5)  # Rate limiting
         t = yf.Ticker(ticker)
         data = t.history(period="1d")
         if data is not None and not data.empty:
             return float(data["Close"].iloc[-1])
         return None
     except Exception as e:
-        st.error(f"Error fetching price for {ticker}: {e}")
+        if "Too Many Requests" in str(e) or "rate limit" in str(e).lower():
+            st.warning(f"Rate limited for {ticker}. Using cached data or try again in 1 minute.")
+        else:
+            st.error(f"Error fetching price for {ticker}: {e}")
         return None
+
+@st.cache_data(ttl=600)  # Cache for 10 minutes
+def get_stock_history(ticker, period="3mo", interval="1d"):
+    """Fetch stock history with caching and rate limiting"""
+    try:
+        time.sleep(0.5)  # Rate limiting
+        t = yf.Ticker(ticker)
+        hist = t.history(period=period, interval=interval)
+        return hist
+    except Exception as e:
+        if "Too Many Requests" in str(e) or "rate limit" in str(e).lower():
+            st.error("⚠️ Yahoo Finance rate limit reached. Please wait 60 seconds and try again.")
+            st.info("**Tip**: Yahoo Finance limits requests. Try:\n- Waiting 1-2 minutes between analyses\n- Using different tickers\n- Refreshing the page")
+        else:
+            st.error(f"Error fetching data: {e}")
+        return None
+
+@st.cache_data(ttl=600)  # Cache for 10 minutes
+def get_stock_info(ticker):
+    """Fetch stock info with caching"""
+    try:
+        time.sleep(0.3)  # Rate limiting
+        t = yf.Ticker(ticker)
+        return getattr(t, "info", {}) or {}
+    except Exception as e:
+        return {}
 
 def compute_indicators(df):
     """Compute technical indicators"""
@@ -501,6 +531,21 @@ with st.sidebar:
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = 0
 
+if "last_analysis_time" not in st.session_state:
+    st.session_state.last_analysis_time = 0
+
+def check_rate_limit(min_seconds=5):
+    """Check if enough time has passed since last request"""
+    current_time = time.time()
+    time_passed = current_time - st.session_state.last_analysis_time
+    
+    if time_passed < min_seconds:
+        remaining = int(min_seconds - time_passed)
+        return False, remaining
+    
+    st.session_state.last_analysis_time = current_time
+    return True, 0
+
 # ---------------------------
 # Page: Home
 # ---------------------------
@@ -632,12 +677,25 @@ elif page == "Stock Analyzer":
         interval = st.selectbox("Interval", ["1d", "1wk"], index=0)
     
     if st.button("Analyze Stock", use_container_width=True):
+        # Check rate limit
+        can_proceed, wait_time = check_rate_limit(min_seconds=5)
+        
+        if not can_proceed:
+            st.warning(f"⏳ Please wait {wait_time} seconds between analyses to avoid rate limits.")
+            st.info("Yahoo Finance has strict rate limits. This cooldown helps prevent blocking.")
+            st.stop()
+        
         with st.spinner(f"Analyzing {ticker}..."):
             try:
-                t = yf.Ticker(ticker)
-                hist = t.history(period=period, interval=interval)
+                # Use cached function
+                hist = get_stock_history(ticker, period=period, interval=interval)
                 
-                if hist is None or hist.empty:
+                if hist is None:
+                    st.error("⚠️ Could not fetch data. Please wait 60 seconds and try again.")
+                    st.info("**Yahoo Finance Rate Limits**: Free tier has strict limits. Wait between requests.")
+                    st.stop()
+                
+                if hist.empty:
                     st.error("No data available for this ticker")
                 else:
                     # Price Chart
@@ -661,7 +719,7 @@ elif page == "Stock Analyzer":
                     
                     # Fundamentals
                     st.subheader("📊 Fundamentals")
-                    info = getattr(t, "info", {}) or {}
+                    info = get_stock_info(ticker)
                     
                     cols = st.columns(4)
                     metrics = [
@@ -729,7 +787,21 @@ elif page == "Stock Analyzer":
                     st.markdown(analysis)
                     
             except Exception as e:
-                st.error(f"Error analyzing stock: {e}")
+                error_msg = str(e)
+                if "Too Many Requests" in error_msg or "rate limit" in error_msg.lower():
+                    st.error("⚠️ **Rate Limit Exceeded**")
+                    st.warning("""
+                    Yahoo Finance has blocked too many requests. Please:
+                    
+                    1. **Wait 60-120 seconds** before trying again
+                    2. **Refresh the page** to clear the session
+                    3. **Try a different ticker** 
+                    4. **Use cached data** by re-analyzing the same ticker
+                    
+                    **Why this happens**: Yahoo Finance free tier has strict rate limits to prevent abuse.
+                    """)
+                else:
+                    st.error(f"Error analyzing stock: {e}")
 
 # [Continue with remaining pages... Character limit reached. Would you like me to continue with the rest?]
 
