@@ -300,7 +300,7 @@ def get_stock_history(ticker, period="3mo", interval="1d"):
         return hist
     except Exception as e:
         if "Too Many Requests" in str(e) or "rate limit" in str(e).lower():
-            st.error("⚠️ Yahoo Finance rate limit reached. Please wait 60 seconds and try again.")
+            st.error(" Yahoo Finance rate limit reached. Please wait 60 seconds and try again.")
             st.info("**Tip**: Yahoo Finance limits requests. Try:\n- Waiting 1-2 minutes between analyses\n- Using different tickers\n- Refreshing the page")
         else:
             st.error(f"Error fetching data: {e}")
@@ -453,7 +453,7 @@ def calculate_risk_score(df):
 st.set_page_config(
     page_title="Professional Investment Platform",
     layout="wide",
-    page_icon="📊",
+    page_icon="",
     initial_sidebar_state="expanded"
 )
 
@@ -481,7 +481,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("📊 Professional Investment Platform")
+    st.title(" Professional Investment Platform")
     st.markdown("### Secure Login")
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -500,7 +500,7 @@ if not st.session_state.authenticated:
 # ---------------------------
 # Main Application
 # ---------------------------
-st.markdown('<p class="main-header">📊 Professional Investment Platform</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header"> Professional Investment Platform</p>', unsafe_allow_html=True)
 st.markdown("**Advanced Technical Analysis Dashboard**")
 
 # Sidebar Navigation
@@ -586,7 +586,7 @@ if page == "Home":
         ### Supported Markets
         - 🇺🇸 US Stocks (e.g., AAPL, MSFT)
         - 🇮🇳 Indian Stocks (e.g., TCS.NS, INFY.NS)
-        - 💰 Cryptocurrencies (e.g., BTC-USD, ETH-USD)
+        -  Cryptocurrencies (e.g., BTC-USD, ETH-USD)
         """)
     
     st.info("**Note**: All data is processed locally. Your portfolio is stored in a local SQLite database.")
@@ -613,7 +613,7 @@ elif page == "Real-Time Monitor":
         st.session_state.last_refresh = time.time()
         
         for t in tickers:
-            with st.expander(f"📈 {t}", expanded=True):
+            with st.expander(f" {t}", expanded=True):
                 try:
                     ticker_obj = yf.Ticker(t)
                     intraday = ticker_obj.history(period="1d", interval="1m")
@@ -666,7 +666,7 @@ elif page == "Real-Time Monitor":
 # Page: Stock Analyzer
 # ---------------------------
 elif page == "Stock Analyzer":
-    st.header("📊 Stock Analyzer")
+    st.header(" Stock Analyzer")
     
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
@@ -681,7 +681,7 @@ elif page == "Stock Analyzer":
         can_proceed, wait_time = check_rate_limit(min_seconds=5)
         
         if not can_proceed:
-            st.warning(f"⏳ Please wait {wait_time} seconds between analyses to avoid rate limits.")
+            st.warning(f" Please wait {wait_time} seconds between analyses to avoid rate limits.")
             st.info("Yahoo Finance has strict rate limits. This cooldown helps prevent blocking.")
             st.stop()
         
@@ -691,7 +691,7 @@ elif page == "Stock Analyzer":
                 hist = get_stock_history(ticker, period=period, interval=interval)
                 
                 if hist is None:
-                    st.error("⚠️ Could not fetch data. Please wait 60 seconds and try again.")
+                    st.error(" Could not fetch data. Please wait 60 seconds and try again.")
                     st.info("**Yahoo Finance Rate Limits**: Free tier has strict limits. Wait between requests.")
                     st.stop()
                 
@@ -699,7 +699,7 @@ elif page == "Stock Analyzer":
                     st.error("No data available for this ticker")
                 else:
                     # Price Chart
-                    st.subheader("📈 Price Chart")
+                    st.subheader(" Price Chart")
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=hist.index,
@@ -718,7 +718,7 @@ elif page == "Stock Analyzer":
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Fundamentals
-                    st.subheader("📊 Fundamentals")
+                    st.subheader(" Fundamentals")
                     info = get_stock_info(ticker)
                     
                     cols = st.columns(4)
@@ -736,7 +736,7 @@ elif page == "Stock Analyzer":
                             col.metric(label, value)
                     
                     # Technical Analysis
-                    st.subheader("🔬 Technical Analysis")
+                    st.subheader(" Technical Analysis")
                     df = compute_indicators(hist)
                     risk_score, risk_level, risk_breakdown = calculate_risk_score(df)
                     
@@ -757,13 +757,13 @@ elif page == "Stock Analyzer":
                         
                         rsi_val = df['RSI'].iloc[-1]
                         if rsi_val > 70:
-                            st.warning("⚠ Overbought (RSI > 70)")
+                            st.warning("Overbought (RSI > 70)")
                         elif rsi_val < 30:
                             st.info("ℹ Oversold (RSI < 30)")
                     
                     # Risk Analysis
                     st.markdown("---")
-                    st.subheader("⚠ Risk Analysis")
+                    st.subheader(" Risk Analysis")
                     
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Risk Score", f"{risk_score}/100")
@@ -782,14 +782,14 @@ elif page == "Stock Analyzer":
                     st.dataframe(risk_df, use_container_width=True, hide_index=True)
                     
                     # Local AI Analysis
-                    st.subheader("🤖 AI Analysis")
+                    st.subheader(" AI Analysis")
                     analysis = generate_local_analysis(ticker, df)
                     st.markdown(analysis)
                     
             except Exception as e:
                 error_msg = str(e)
                 if "Too Many Requests" in error_msg or "rate limit" in error_msg.lower():
-                    st.error("⚠️ **Rate Limit Exceeded**")
+                    st.error(" **Rate Limit Exceeded**")
                     st.warning("""
                     Yahoo Finance has blocked too many requests. Please:
                     
@@ -809,7 +809,7 @@ elif page == "Stock Analyzer":
 # Page: News & Sentiment
 # ---------------------------
 elif page == "News & Sentiment":
-    st.header("📰 News & Sentiment Analysis")
+    st.header(" News & Sentiment Analysis")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -824,7 +824,7 @@ elif page == "News & Sentiment":
                 raw_news = getattr(t, "news", []) or []
                 
                 if not raw_news:
-                    st.warning("⚠️ Yahoo Finance did not return news for this ticker.")
+                    st.warning(" Yahoo Finance did not return news for this ticker.")
                     st.info("""
                     **Why this happens:**
                     - Yahoo Finance news API is unreliable and often doesn't return data
@@ -840,7 +840,7 @@ elif page == "News & Sentiment":
                     
                     # Provide sample sentiment analysis
                     st.markdown("---")
-                    st.subheader("📊 Demo: Sentiment Analysis Capability")
+                    st.subheader(" Demo: Sentiment Analysis Capability")
                     st.write("Here's how sentiment analysis works with sample headlines:")
                     
                     sample_headlines = [
@@ -879,7 +879,7 @@ elif page == "News & Sentiment":
                             headlines.append({"title": title, "link": link, "publisher": publisher})
                     
                     if headlines:
-                        st.subheader(f"📰 Latest Headlines for {nt}")
+                        st.subheader(f" Latest Headlines for {nt}")
                         
                         # Extract headline texts for sentiment analysis
                         headline_texts = [h['title'] for h in headlines]
@@ -888,7 +888,7 @@ elif page == "News & Sentiment":
                         sentiment_results = analyze_news_sentiment(headline_texts)
                         
                         # Display sentiment summary
-                        st.markdown("### 📊 Sentiment Analysis Summary")
+                        st.markdown("###  Sentiment Analysis Summary")
                         col1, col2, col3, col4 = st.columns(4)
                         
                         col1.metric("Overall Sentiment", sentiment_results['overall_sentiment'])
@@ -901,14 +901,14 @@ elif page == "News & Sentiment":
                         st.progress(min(max((sentiment_score + 1) / 2, 0), 1))
                         
                         if sentiment_score > 0.15:
-                            st.success("📈 Bullish sentiment detected - Positive news flow")
+                            st.success(" Bullish sentiment detected - Positive news flow")
                         elif sentiment_score < -0.15:
-                            st.error("📉 Bearish sentiment detected - Negative news flow")
+                            st.error(" Bearish sentiment detected - Negative news flow")
                         else:
-                            st.info("➡️ Neutral sentiment - Mixed signals")
+                            st.info(" Neutral sentiment - Mixed signals")
                         
                         st.markdown("---")
-                        st.markdown("### 📑 Individual Headlines")
+                        st.markdown("###  Individual Headlines")
                         
                         for i, h in enumerate(headlines, 1):
                             polarity, label, confidence = analyze_sentiment_local(h['title'])
@@ -1024,7 +1024,7 @@ Based on the {len(headlines)} most recent headlines, the aggregate sentiment sco
 # Page: Cryptocurrency
 # ---------------------------
 elif page == "Cryptocurrency":
-    st.header("💰 Cryptocurrency Analyzer")
+    st.header(" Cryptocurrency Analyzer")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -1091,7 +1091,7 @@ elif page == "Cryptocurrency":
                     st.plotly_chart(fig_vol, use_container_width=True)
                     
                     # Technical Analysis
-                    st.subheader("🔬 Technical Analysis")
+                    st.subheader(" Technical Analysis")
                     ch_indicators = compute_indicators(ch)
                     
                     if len(ch_indicators) > 50:
@@ -1161,7 +1161,7 @@ elif page == "Cryptocurrency":
 # Page: Portfolio Manager
 # ---------------------------
 elif page == "Portfolio Manager":
-    st.header("💼 Portfolio Management")
+    st.header(" Portfolio Management")
     
     st.markdown("### Add New Position")
     
@@ -1267,7 +1267,7 @@ elif page == "Portfolio Manager":
 # Page: Predictions
 # ---------------------------
 elif page == "Predictions":
-    st.header("🔮 Technical Price Predictions")
+    st.header(" Technical Price Predictions")
     
     st.info("**Disclaimer**: These predictions are based on technical analysis and historical patterns. Markets are unpredictable. Always do your own research.")
     
@@ -1287,7 +1287,7 @@ elif page == "Predictions":
                     st.error("Not enough historical data for prediction")
                 else:
                     # Display recent price action
-                    st.subheader("📈 Recent Price History")
+                    st.subheader(" Recent Price History")
                     
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
@@ -1320,7 +1320,7 @@ elif page == "Predictions":
                     
                     # Technical prediction
                     st.markdown("---")
-                    st.subheader("📊 Technical Forecast")
+                    st.subheader(" Technical Forecast")
                     
                     # Simple momentum-based prediction
                     predicted_price = current_price * (1 + avg_daily_return * days)
@@ -1403,7 +1403,7 @@ This forecast uses:
                     st.markdown(prediction_text)
                     
                     # Visualization
-                    st.subheader("📉 Price Projection Visualization")
+                    st.subheader(" Price Projection Visualization")
                     
                     future_dates = pd.date_range(start=hist.index[-1], periods=days+1, freq='D')[1:]
                     
@@ -1471,7 +1471,7 @@ This forecast uses:
 # Page: Research Assistant
 # ---------------------------
 elif page == "Research Assistant":
-    st.header("🔍 Investment Research Assistant")
+    st.header(" Investment Research Assistant")
     st.markdown("Analyze stocks with comprehensive technical and fundamental research")
     
     # Quick action buttons
@@ -1511,7 +1511,7 @@ elif page == "Research Assistant":
             research_results = []
             
             for ticker in tickers_list:
-                with st.expander(f"📊 Analysis: {ticker}", expanded=True):
+                with st.expander(f" Analysis: {ticker}", expanded=True):
                     try:
                         hist = get_stock_history(ticker, period="6mo")
                         
@@ -1545,7 +1545,7 @@ elif page == "Research Assistant":
             # Summary
             if research_results:
                 st.markdown("---")
-                st.subheader("📋 Research Summary")
+                st.subheader(" Research Summary")
                 
                 buy_signals = [r for r in research_results if r['signal'] == 'BUY']
                 low_risk = [r for r in research_results if r['risk'] < 40]
@@ -1686,7 +1686,7 @@ elif page == "Market Screener":
                 
                 # Summary analysis
                 st.markdown("---")
-                st.subheader("📊 Screening Results Analysis")
+                st.subheader(" Screening Results Analysis")
                 
                 summary = f"""
 ### Screening Summary
@@ -1725,7 +1725,7 @@ elif page == "Market Screener":
 # Page: Compare Stocks
 # ---------------------------
 elif page == "Compare Stocks":
-    st.header("⚖️ Side-by-Side Stock Comparison")
+    st.header(" Side-by-Side Stock Comparison")
     
     col1, col2 = st.columns(2)
     
@@ -1785,12 +1785,12 @@ elif page == "Compare Stocks":
             
             if comparison_data:
                 # Comparison table
-                st.subheader("📊 Comparison Table")
+                st.subheader(" Comparison Table")
                 comp_df = pd.DataFrame(comparison_data)
                 st.dataframe(comp_df, use_container_width=True, hide_index=True)
                 
                 # Price comparison chart
-                st.subheader("📈 Performance Comparison")
+                st.subheader(" Performance Comparison")
                 
                 if price_history:
                     fig = go.Figure()
@@ -1817,7 +1817,7 @@ elif page == "Compare Stocks":
                 
                 # Comparison analysis
                 st.markdown("---")
-                st.subheader("📋 Comparison Analysis")
+                st.subheader(" Comparison Analysis")
                 
                 analysis = generate_comparison_analysis(comparison_data)
                 st.markdown(analysis)
@@ -1826,35 +1826,35 @@ elif page == "Compare Stocks":
 # Page: Settings
 # ---------------------------
 elif page == "Settings":
-    st.header("⚙️ Settings & System Information")
+    st.header("Settings & System Information")
     
     # System Status
-    st.subheader("📊 System Status")
+    st.subheader(" System Status")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.write("**Analysis Engine:**")
-        st.success("✓ Local analysis active")
-        st.success("✓ Technical indicators operational")
-        st.success("✓ Risk scoring enabled")
+        st.success(" Local analysis active")
+        st.success(" Technical indicators operational")
+        st.success(" Risk scoring enabled")
         
         if TEXTBLOB_AVAILABLE:
-            st.success("✓ Sentiment analysis ready")
+            st.success("Sentiment analysis ready")
         else:
-            st.warning("⚠ TextBlob not installed")
+            st.warning(" TextBlob not installed")
             st.code("pip install textblob")
     
     with col2:
         st.write("**Data Sources:**")
-        st.info("📊 Yahoo Finance API")
-        st.info("💾 Local SQLite database")
-        st.info("🔒 No external API keys required")
+        st.info(" Yahoo Finance API")
+        st.info(" Local SQLite database")
+        st.info(" No external API keys required")
     
     st.markdown("---")
     
     # Database Management
-    st.subheader("💾 Database Management")
+    st.subheader(" Database Management")
     
     df = list_positions_db()
     st.write(f"**Current Positions:** {len(df)}")
@@ -1867,7 +1867,7 @@ elif page == "Settings":
             c = conn.cursor()
             c.execute("DELETE FROM portfolio")
             conn.commit()
-            st.success("✓ Portfolio cleared successfully")
+            st.success(" Portfolio cleared successfully")
             time.sleep(1)
             st.rerun()
     
@@ -1882,7 +1882,7 @@ elif page == "Settings":
     st.markdown("---")
     
     # System Information
-    st.subheader("ℹ️ System Information")
+    st.subheader(" System Information")
     
     st.write("**Required Packages:**")
     st.code("streamlit, yfinance, pandas, numpy, plotly, textblob")
@@ -1894,7 +1894,7 @@ elif page == "Settings":
     st.markdown("---")
     
     # API Testing
-    st.subheader("🧪 System Testing")
+    st.subheader(" System Testing")
     
     test_ticker = st.text_input("Test Ticker", "AAPL")
     
@@ -1903,20 +1903,20 @@ elif page == "Settings":
             try:
                 hist = get_stock_history(test_ticker, period="1d")
                 if hist is not None and not hist.empty:
-                    st.success("✓ Data fetch successful")
+                    st.success(" Data fetch successful")
                     st.write("Latest data:")
                     st.dataframe(hist.tail(1))
                 else:
-                    st.error("✗ No data returned")
+                    st.error(" No data returned")
             except Exception as e:
-                st.error(f"✗ Error: {e}")
+                st.error(f" Error: {e}")
     
     if st.button("Test Sentiment Analysis"):
         if TEXTBLOB_AVAILABLE:
             test_text = "Apple announces record quarterly earnings with strong iPhone sales"
             polarity, label, confidence = analyze_sentiment_local(test_text)
-            st.success("✓ Sentiment analysis operational")
+            st.success(" Sentiment analysis operational")
             st.write(f"Test Text: {test_text}")
             st.write(f"Sentiment: {label} (Score: {polarity:.2f}, Confidence: {confidence:.2%})")
         else:
-            st.error("✗ TextBlob not available")
+            st.error(" TextBlob not available")
