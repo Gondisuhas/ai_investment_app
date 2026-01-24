@@ -1466,3 +1466,457 @@ This forecast uses:
                     
             except Exception as e:
                 st.error(f"Error generating prediction: {e}")
+
+# ---------------------------
+# Page: Research Assistant
+# ---------------------------
+elif page == "Research Assistant":
+    st.header("🔍 Investment Research Assistant")
+    st.markdown("Analyze stocks with comprehensive technical and fundamental research")
+    
+    # Quick action buttons
+    st.markdown("### Quick Analysis Templates")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("Top Momentum Stocks", use_container_width=True):
+            st.session_state.research_query = "Analyze stocks showing strong momentum with RSI between 50-70"
+    with col2:
+        if st.button("Oversold Opportunities", use_container_width=True):
+            st.session_state.research_query = "Find oversold stocks with RSI < 30 that might rebound"
+    with col3:
+        if st.button("Low Risk Stocks", use_container_width=True):
+            st.session_state.research_query = "Identify low volatility stocks with stable trends"
+    
+    st.markdown("---")
+    
+    # Research query
+    if "research_query" not in st.session_state:
+        st.session_state.research_query = ""
+    
+    tickers_to_research = st.text_input(
+        "Enter tickers to research (comma-separated)",
+        placeholder="e.g., AAPL,MSFT,GOOGL",
+        help="Enter specific tickers for detailed analysis"
+    )
+    
+    if st.button("Conduct Research", type="primary", use_container_width=True):
+        if not tickers_to_research.strip():
+            st.error("Please enter at least one ticker")
+        else:
+            tickers_list = [t.strip().upper() for t in tickers_to_research.split(",") if t.strip()]
+            
+            st.info(f"Researching {len(tickers_list)} stock(s)...")
+            
+            research_results = []
+            
+            for ticker in tickers_list:
+                with st.expander(f"📊 Analysis: {ticker}", expanded=True):
+                    try:
+                        hist = get_stock_history(ticker, period="6mo")
+                        
+                        if hist is not None and not hist.empty and len(hist) > 50:
+                            df = compute_indicators(hist)
+                            risk_score, risk_level, risk_breakdown = calculate_risk_score(df)
+                            signal = generate_signal(df)
+                            
+                            # Display metrics
+                            col1, col2, col3, col4 = st.columns(4)
+                            col1.metric("Price", f"${df['Close'].iloc[-1]:.2f}")
+                            col2.metric("Signal", signal)
+                            col3.metric("Risk", f"{risk_score}/100")
+                            col4.metric("RSI", f"{df['RSI'].iloc[-1]:.1f}")
+                            
+                            # Generate analysis
+                            analysis = generate_local_analysis(ticker, df)
+                            st.markdown(analysis)
+                            
+                            research_results.append({
+                                "ticker": ticker,
+                                "signal": signal,
+                                "risk": risk_score,
+                                "price": df['Close'].iloc[-1]
+                            })
+                        else:
+                            st.warning(f"Insufficient data for {ticker}")
+                    except Exception as e:
+                        st.error(f"Error researching {ticker}: {e}")
+            
+            # Summary
+            if research_results:
+                st.markdown("---")
+                st.subheader("📋 Research Summary")
+                
+                buy_signals = [r for r in research_results if r['signal'] == 'BUY']
+                low_risk = [r for r in research_results if r['risk'] < 40]
+                
+                summary_text = f"""
+### Portfolio Recommendations
+
+**Total Stocks Analyzed**: {len(research_results)}
+
+**Buy Signals**: {len(buy_signals)} stocks
+"""
+                
+                if buy_signals:
+                    summary_text += "- " + ", ".join([r['ticker'] for r in buy_signals]) + "\n"
+                
+                summary_text += f"\n**Low Risk Opportunities**: {len(low_risk)} stocks\n"
+                
+                if low_risk:
+                    summary_text += "- " + ", ".join([r['ticker'] for r in low_risk]) + "\n"
+                
+                summary_text += "\n### Investment Strategy Recommendations\n\n"
+                
+                if buy_signals and low_risk:
+                    overlap = [r['ticker'] for r in buy_signals if r in low_risk]
+                    if overlap:
+                        summary_text += f"**Priority Targets**: {', '.join(overlap)} - Both low risk and buy signals\n\n"
+                
+                summary_text += "### Next Steps\n"
+                summary_text += "1. Review individual stock analysis above\n"
+                summary_text += "2. Verify technical signals with fundamental research\n"
+                summary_text += "3. Consider position sizing based on risk scores\n"
+                summary_text += "4. Set appropriate stop-loss levels\n"
+                summary_text += "5. Monitor regularly for signal changes\n"
+                
+                st.markdown(summary_text)
+
+# ---------------------------
+# Page: Market Screener
+# ---------------------------
+elif page == "Market Screener":
+    st.header("🔎 Market Screener")
+    st.markdown("Find stocks matching your investment criteria")
+    
+    st.markdown("### Screening Criteria")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Technical Filters**")
+        rsi_min = st.slider("Min RSI", 0, 100, 30)
+        rsi_max = st.slider("Max RSI", 0, 100, 70)
+        
+        signal_filter = st.multiselect(
+            "Trading Signal",
+            ["BUY", "SELL", "HOLD"],
+            default=["BUY"]
+        )
+    
+    with col2:
+        st.markdown("**Risk Filters**")
+        risk_max = st.slider("Max Risk Score", 0, 100, 60)
+    
+    # Stock universe
+    st.markdown("### Stock Universe")
+    
+    preset = st.radio(
+        "Choose preset or custom:",
+        ["US Top 30", "Indian Nifty 20", "Custom List"],
+        horizontal=True
+    )
+    
+    if preset == "US Top 30":
+        stock_universe = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK.B", "JPM", "JNJ",
+                         "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "NFLX", "ADBE", "CRM",
+                         "INTC", "CSCO", "PFE", "KO", "PEP", "ABT", "TMO", "COST", "AVGO", "ACN"]
+    elif preset == "Indian Nifty 20":
+        stock_universe = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "HINDUNILVR.NS", 
+                         "ICICIBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "KOTAKBANK.NS",
+                         "LT.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS", "TITAN.NS",
+                         "WIPRO.NS", "HCLTECH.NS", "ULTRACEMCO.NS", "BAJFINANCE.NS", "NESTLEIND.NS"]
+    else:
+        custom_input = st.text_area(
+            "Enter tickers (comma-separated)",
+            "AAPL,MSFT,GOOGL,TSLA"
+        )
+        stock_universe = [t.strip().upper() for t in custom_input.split(",") if t.strip()]
+    
+    st.info(f"Will screen {len(stock_universe)} stocks")
+    
+    if st.button("Run Screener", type="primary", use_container_width=True):
+        with st.spinner(f"Screening {len(stock_universe)} stocks..."):
+            results = []
+            progress_bar = st.progress(0)
+            
+            for idx, ticker in enumerate(stock_universe):
+                try:
+                    hist = get_stock_history(ticker, period="3mo")
+                    
+                    if hist is not None and not hist.empty and len(hist) > 50:
+                        df = compute_indicators(hist)
+                        risk_score, risk_level, _ = calculate_risk_score(df)
+                        signal = generate_signal(df)
+                        
+                        current_rsi = df['RSI'].iloc[-1]
+                        current_price = df['Close'].iloc[-1]
+                        
+                        if (rsi_min <= current_rsi <= rsi_max and 
+                            signal in signal_filter and 
+                            risk_score <= risk_max):
+                            
+                            info = get_stock_info(ticker)
+                            
+                            results.append({
+                                "Ticker": ticker,
+                                "Price": f"${current_price:.2f}",
+                                "Signal": signal,
+                                "RSI": f"{current_rsi:.1f}",
+                                "Risk": f"{risk_score:.0f}",
+                                "Risk Level": risk_level,
+                                "Sector": info.get("sector", "N/A")
+                            })
+                    
+                    progress_bar.progress((idx + 1) / len(stock_universe))
+                    time.sleep(0.3)  # Rate limiting
+                    
+                except Exception:
+                    continue
+            
+            progress_bar.empty()
+            
+            if results:
+                st.success(f"✓ Found {len(results)} stocks matching criteria")
+                
+                results_df = pd.DataFrame(results)
+                results_df = results_df.sort_values("Risk", ascending=True)
+                
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+                
+                # Summary analysis
+                st.markdown("---")
+                st.subheader("📊 Screening Results Analysis")
+                
+                summary = f"""
+### Screening Summary
+
+**Total Matches**: {len(results)} stocks out of {len(stock_universe)} screened
+
+**Filter Criteria Applied**:
+- RSI Range: {rsi_min} - {rsi_max}
+- Signals: {', '.join(signal_filter)}
+- Maximum Risk Score: {risk_max}
+
+**Top Picks** (Lowest Risk):
+"""
+                
+                top_5 = results_df.head(5)
+                for idx, row in top_5.iterrows():
+                    summary += f"\n{idx+1}. **{row['Ticker']}** - Price: {row['Price']}, Risk: {row['Risk']}, Signal: {row['Signal']}"
+                
+                summary += "\n\n### Sector Distribution\n"
+                sector_counts = results_df['Sector'].value_counts()
+                for sector, count in sector_counts.items():
+                    summary += f"- {sector}: {count} stocks\n"
+                
+                summary += "\n### Investment Considerations\n"
+                summary += "- Diversify across multiple sectors\n"
+                summary += "- Consider position sizing based on risk scores\n"
+                summary += "- Verify fundamentals before investing\n"
+                summary += "- Set stop-losses according to volatility\n"
+                
+                st.markdown(summary)
+                
+            else:
+                st.warning("No stocks found matching your criteria. Try adjusting filters.")
+
+# ---------------------------
+# Page: Compare Stocks
+# ---------------------------
+elif page == "Compare Stocks":
+    st.header("⚖️ Side-by-Side Stock Comparison")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        ticker1 = st.text_input("Stock 1", "AAPL", key="comp1").upper()
+    with col2:
+        ticker2 = st.text_input("Stock 2", "MSFT", key="comp2").upper()
+    
+    col3, col4 = st.columns(2)
+    with col3:
+        ticker3 = st.text_input("Stock 3 (optional)", "", key="comp3").upper()
+    with col4:
+        ticker4 = st.text_input("Stock 4 (optional)", "", key="comp4").upper()
+    
+    compare_period = st.selectbox("Comparison Period", ["1mo", "3mo", "6mo", "1y"], index=1)
+    
+    if st.button("Compare Stocks", type="primary", use_container_width=True):
+        tickers = [t for t in [ticker1, ticker2, ticker3, ticker4] if t]
+        
+        if len(tickers) < 2:
+            st.error("Please enter at least 2 tickers to compare")
+        else:
+            comparison_data = []
+            price_history = {}
+            
+            with st.spinner(f"Analyzing {len(tickers)} stocks..."):
+                for ticker in tickers:
+                    try:
+                        hist = get_stock_history(ticker, period=compare_period)
+                        info = get_stock_info(ticker)
+                        
+                        if hist is not None and not hist.empty:
+                            df = compute_indicators(hist)
+                            risk_score, risk_level, _ = calculate_risk_score(df)
+                            signal = generate_signal(df)
+                            
+                            start_price = hist['Close'].iloc[0]
+                            end_price = hist['Close'].iloc[-1]
+                            returns = ((end_price - start_price) / start_price) * 100
+                            
+                            price_history[ticker] = hist['Close']
+                            
+                            comparison_data.append({
+                                "Ticker": ticker,
+                                "Price": f"${end_price:.2f}",
+                                "Return": f"{returns:+.2f}%",
+                                "Signal": signal,
+                                "RSI": f"{df['RSI'].iloc[-1]:.1f}",
+                                "Risk Score": f"{risk_score:.0f}/100",
+                                "Risk Level": risk_level,
+                                "P/E Ratio": info.get("trailingPE", "N/A"),
+                                "Sector": info.get("sector", "N/A")
+                            })
+                        time.sleep(0.5)  # Rate limiting
+                    except Exception as e:
+                        st.error(f"Error analyzing {ticker}: {e}")
+            
+            if comparison_data:
+                # Comparison table
+                st.subheader("📊 Comparison Table")
+                comp_df = pd.DataFrame(comparison_data)
+                st.dataframe(comp_df, use_container_width=True, hide_index=True)
+                
+                # Price comparison chart
+                st.subheader("📈 Performance Comparison")
+                
+                if price_history:
+                    fig = go.Figure()
+                    
+                    for ticker, prices in price_history.items():
+                        normalized = (prices / prices.iloc[0]) * 100
+                        fig.add_trace(go.Scatter(
+                            x=normalized.index,
+                            y=normalized,
+                            mode="lines",
+                            name=ticker,
+                            line=dict(width=3)
+                        ))
+                    
+                    fig.update_layout(
+                        template="plotly_dark",
+                        height=450,
+                        xaxis_title="Date",
+                        yaxis_title="Normalized Price (Base = 100)",
+                        hovermode="x unified"
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Comparison analysis
+                st.markdown("---")
+                st.subheader("📋 Comparison Analysis")
+                
+                analysis = generate_comparison_analysis(comparison_data)
+                st.markdown(analysis)
+
+# ---------------------------
+# Page: Settings
+# ---------------------------
+elif page == "Settings":
+    st.header("⚙️ Settings & System Information")
+    
+    # System Status
+    st.subheader("📊 System Status")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**Analysis Engine:**")
+        st.success("✓ Local analysis active")
+        st.success("✓ Technical indicators operational")
+        st.success("✓ Risk scoring enabled")
+        
+        if TEXTBLOB_AVAILABLE:
+            st.success("✓ Sentiment analysis ready")
+        else:
+            st.warning("⚠ TextBlob not installed")
+            st.code("pip install textblob")
+    
+    with col2:
+        st.write("**Data Sources:**")
+        st.info("📊 Yahoo Finance API")
+        st.info("💾 Local SQLite database")
+        st.info("🔒 No external API keys required")
+    
+    st.markdown("---")
+    
+    # Database Management
+    st.subheader("💾 Database Management")
+    
+    df = list_positions_db()
+    st.write(f"**Current Positions:** {len(df)}")
+    st.write(f"**Database Path:** `{DB_PATH}`")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Clear All Positions", type="primary"):
+            c = conn.cursor()
+            c.execute("DELETE FROM portfolio")
+            conn.commit()
+            st.success("✓ Portfolio cleared successfully")
+            time.sleep(1)
+            st.rerun()
+    
+    with col2:
+        if st.button("Show Database Stats"):
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) as count, SUM(qty) as total_qty FROM portfolio")
+            stats = c.fetchone()
+            st.write(f"- Total Positions: {stats[0]}")
+            st.write(f"- Total Shares: {stats[1]}")
+    
+    st.markdown("---")
+    
+    # System Information
+    st.subheader("ℹ️ System Information")
+    
+    st.write("**Required Packages:**")
+    st.code("streamlit, yfinance, pandas, numpy, plotly, textblob")
+    
+    st.write(f"**Database:** {DB_PATH}")
+    st.write(f"**Authenticated:** {st.session_state.authenticated}")
+    st.write(f"**Auto-refresh:** {'Disabled' if refresh_auto == 0 else f'{refresh_auto}s'}")
+    
+    st.markdown("---")
+    
+    # API Testing
+    st.subheader("🧪 System Testing")
+    
+    test_ticker = st.text_input("Test Ticker", "AAPL")
+    
+    if st.button("Test Data Fetch"):
+        with st.spinner(f"Testing {test_ticker}..."):
+            try:
+                hist = get_stock_history(test_ticker, period="1d")
+                if hist is not None and not hist.empty:
+                    st.success("✓ Data fetch successful")
+                    st.write("Latest data:")
+                    st.dataframe(hist.tail(1))
+                else:
+                    st.error("✗ No data returned")
+            except Exception as e:
+                st.error(f"✗ Error: {e}")
+    
+    if st.button("Test Sentiment Analysis"):
+        if TEXTBLOB_AVAILABLE:
+            test_text = "Apple announces record quarterly earnings with strong iPhone sales"
+            polarity, label, confidence = analyze_sentiment_local(test_text)
+            st.success("✓ Sentiment analysis operational")
+            st.write(f"Test Text: {test_text}")
+            st.write(f"Sentiment: {label} (Score: {polarity:.2f}, Confidence: {confidence:.2%})")
+        else:
+            st.error("✗ TextBlob not available")
