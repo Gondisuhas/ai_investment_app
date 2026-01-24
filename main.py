@@ -23,29 +23,13 @@ except ImportError:
 # ---------------------------
 # Configuration & Secrets
 # ---------------------------
-# Multi-user credentials
 try:
-    if "USERS" in st.secrets:
-        # Format in secrets.toml:
-        # [USERS]
-        # admin = "admin123"
-        # user1 = "password1"
-        # user2 = "password2"
-        USERS = dict(st.secrets["USERS"])
+    if "APP_PASSWORD" in st.secrets:
+        APP_PASSWORD = st.secrets["APP_PASSWORD"]
     else:
-        # Default users if no secrets
-        USERS = {
-            "admin": "admin123",
-            "user1": "password1",
-            "user2": "password2"
-        }
+        APP_PASSWORD = "password123"
 except (KeyError, FileNotFoundError, Exception):
-    # Fallback default users
-    USERS = {
-        "admin": "admin123",
-        "user1": "password1",
-        "user2": "password2"
-    }
+    APP_PASSWORD = "password123"
 
 # ---------------------------
 # Local Sentiment Analysis
@@ -248,13 +232,12 @@ DB_PATH = "portfolio.db"
 
 @st.cache_resource
 def init_db():
-    """Initialize database connection with user-specific portfolios"""
+    """Initialize database connection"""
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS portfolio (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
             ticker TEXT NOT NULL,
             qty REAL NOT NULL,
             avg_price REAL NOT NULL,
@@ -266,23 +249,23 @@ def init_db():
 
 conn = init_db()
 
-def add_position_db(username, ticker, qty, avg_price):
-    """Add a position to the portfolio for specific user"""
+def add_position_db(ticker, qty, avg_price):
+    """Add a position to the portfolio"""
     c = conn.cursor()
-    c.execute("INSERT INTO portfolio (username, ticker, qty, avg_price) VALUES (?, ?, ?, ?)",
-              (username, ticker.upper(), float(qty), float(avg_price)))
+    c.execute("INSERT INTO portfolio (ticker, qty, avg_price) VALUES (?, ?, ?)",
+              (ticker.upper(), float(qty), float(avg_price)))
     conn.commit()
 
-def remove_position_db(username, row_id):
-    """Remove a position from the portfolio for specific user"""
+def remove_position_db(row_id):
+    """Remove a position from the portfolio"""
     c = conn.cursor()
-    c.execute("DELETE FROM portfolio WHERE id = ? AND username = ?", (row_id, username))
+    c.execute("DELETE FROM portfolio WHERE id = ?", (row_id,))
     conn.commit()
 
-def list_positions_db(username):
-    """List all portfolio positions for specific user"""
+def list_positions_db():
+    """List all portfolio positions"""
     c = conn.cursor()
-    c.execute("SELECT id, ticker, qty, avg_price, added_at FROM portfolio WHERE username = ? ORDER BY added_at DESC", (username,))
+    c.execute("SELECT id, ticker, qty, avg_price, added_at FROM portfolio ORDER BY added_at DESC")
     rows = c.fetchall()
     cols = ["id", "ticker", "qty", "avg_price", "added_at"]
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
@@ -317,7 +300,7 @@ def get_stock_history(ticker, period="3mo", interval="1d"):
         return hist
     except Exception as e:
         if "Too Many Requests" in str(e) or "rate limit" in str(e).lower():
-            st.error("⚠️ Yahoo Finance rate limit reached. Please wait 60 seconds and try again.")
+            st.error(" Yahoo Finance rate limit reached. Please wait 60 seconds and try again.")
             st.info("**Tip**: Yahoo Finance limits requests. Try:\n- Waiting 1-2 minutes between analyses\n- Using different tickers\n- Refreshing the page")
         else:
             st.error(f"Error fetching data: {e}")
@@ -470,256 +453,23 @@ def calculate_risk_score(df):
 st.set_page_config(
     page_title="Professional Investment Platform",
     layout="wide",
-    page_icon="📊",
+    page_icon="",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - Enhanced Professional Design
+# Custom CSS
 st.markdown("""
 <style>
-    /* Main Layout */
     .main-header {
-        font-size: 2.8rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #1f77b4 0%, #2e5cb8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
-        letter-spacing: -0.5px;
-    }
-    
-    .subtitle {
-        color: #666;
-        font-size: 1.1rem;
-        margin-top: -10px;
-        margin-bottom: 2rem;
-    }
-    
-    /* Card Styles */
-    .metric-card {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        padding: 25px;
-        border-radius: 15px;
-        margin: 15px 0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-        border-left: 4px solid #1f77b4;
-        transition: transform 0.2s;
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.1);
-    }
-    
-    /* Stats Container */
-    div[data-testid="stMetricValue"] {
-        font-size: 1.8rem;
-        font-weight: 700;
+        font-size: 2.5rem;
+        font-weight: bold;
         color: #1f77b4;
     }
-    
-    div[data-testid="stMetricDelta"] {
-        font-size: 1rem;
-    }
-    
-    /* Buttons */
-    .stButton>button {
-        background: linear-gradient(135deg, #1f77b4 0%, #2e5cb8 100%);
-        color: white;
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 20px;
         border-radius: 10px;
-        padding: 0.6rem 1.5rem;
-        font-weight: 600;
-        border: none;
-        box-shadow: 0 4px 6px rgba(31, 119, 180, 0.2);
-        transition: all 0.3s ease;
-    }
-    
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(31, 119, 180, 0.3);
-        background: linear-gradient(135deg, #2e5cb8 0%, #1f77b4 100%);
-    }
-    
-    /* Input Fields */
-    .stTextInput>div>div>input,
-    .stNumberInput>div>div>input,
-    .stSelectbox>div>div>select {
-        border-radius: 10px;
-        border: 2px solid #e0e0e0;
-        padding: 0.6rem;
-        transition: border-color 0.3s;
-    }
-    
-    .stTextInput>div>div>input:focus,
-    .stNumberInput>div>div>input:focus,
-    .stSelectbox>div>div>select:focus {
-        border-color: #1f77b4;
-        box-shadow: 0 0 0 2px rgba(31, 119, 180, 0.1);
-    }
-    
-    /* Sidebar */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
-    }
-    
-    section[data-testid="stSidebar"] .stSelectbox {
-        background: white;
-        border-radius: 10px;
-        padding: 5px;
-    }
-    
-    /* Expander */
-    .streamlit-expanderHeader {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        border-radius: 10px;
-        font-weight: 600;
-        padding: 1rem;
-        border: 1px solid #e0e0e0;
-    }
-    
-    .streamlit-expanderHeader:hover {
-        border-color: #1f77b4;
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-    }
-    
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        background-color: transparent;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        border-radius: 10px 10px 0 0;
-        padding: 1rem 2rem;
-        font-weight: 600;
-        border: 1px solid #e0e0e0;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #1f77b4 0%, #2e5cb8 100%);
-        color: white;
-    }
-    
-    /* Dataframe */
-    .stDataFrame {
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-    }
-    
-    /* Alert Boxes */
-    .stAlert {
-        border-radius: 10px;
-        border-left: 4px solid;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-    
-    /* Info Box */
-    div[data-testid="stMarkdownContainer"] > div[data-testid="stMarkdown"] {
-        line-height: 1.7;
-    }
-    
-    /* Section Headers */
-    h1, h2, h3 {
-        font-weight: 700;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-    }
-    
-    h1 {
-        border-bottom: 3px solid #1f77b4;
-        padding-bottom: 0.5rem;
-    }
-    
-    h2 {
-        border-bottom: 2px solid #e0e0e0;
-        padding-bottom: 0.5rem;
-    }
-    
-    /* Progress Bar */
-    .stProgress > div > div > div {
-        background: linear-gradient(90deg, #1f77b4 0%, #2e5cb8 100%);
-        border-radius: 10px;
-    }
-    
-    /* Slider */
-    .stSlider > div > div > div > div {
-        background: linear-gradient(90deg, #1f77b4 0%, #2e5cb8 100%);
-    }
-    
-    /* Login Container */
-    .login-container {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        padding: 3rem;
-        border-radius: 20px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        border: 1px solid #e0e0e0;
-    }
-    
-    /* Success/Error Messages */
-    .success-message {
-        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-        color: #155724;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #28a745;
-    }
-    
-    .error-message {
-        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-        color: #721c24;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #dc3545;
-    }
-    
-    /* Chart Container */
-    .js-plotly-plot {
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-    }
-    
-    /* Footer */
-    .footer {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        padding: 2rem;
-        border-radius: 15px;
-        margin-top: 3rem;
-        text-align: center;
-        border-top: 3px solid #1f77b4;
-    }
-    
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, #1f77b4 0%, #2e5cb8 100%);
-        border-radius: 10px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #2e5cb8;
-    }
-    
-    /* Animation for page load */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .main .block-container {
-        animation: fadeIn 0.5s ease-out;
+        margin: 10px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -730,107 +480,32 @@ st.markdown("""
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-if "username" not in st.session_state:
-    st.session_state.username = None
-
 if not st.session_state.authenticated:
-    st.markdown("""
-    <div style='text-align: center; padding: 2rem 0;'>
-        <h1 style='font-size: 3rem; background: linear-gradient(135deg, #1f77b4 0%, #2e5cb8 100%); 
-                   -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0;'>
-            📊 Professional Investment Platform
-        </h1>
-        <p style='font-size: 1.2rem; color: #666; margin-top: 0.5rem;'>
-            Advanced Technical Analysis & Portfolio Management
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.title(" Professional Investment Platform")
+    st.markdown("### Secure Login")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("""
-        <div class='login-container'>
-            <h3 style='text-align: center; color: #1f77b4; margin-bottom: 2rem;'>Secure Authentication</h3>
-        """, unsafe_allow_html=True)
-        
-        username = st.text_input("👤 Username", key="login_username", placeholder="Enter your username")
-        password = st.text_input("🔒 Password", type="password", key="login_password", placeholder="Enter your password")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        col_btn1, col_btn2 = st.columns(2)
-        
-        with col_btn1:
-            if st.button("🚀 Login", use_container_width=True):
-                if username in USERS and USERS[username] == password:
-                    st.session_state.authenticated = True
-                    st.session_state.username = username
-                    st.markdown("""
-                    <div class='success-message'>
-                        ✓ Login successful! Welcome aboard.
-                    </div>
-                    """, unsafe_allow_html=True)
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.markdown("""
-                    <div class='error-message'>
-                        ✗ Invalid credentials. Please try again.
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        with col_btn2:
-            if st.button("📋 Demo Accounts", use_container_width=True):
-                st.info("""
-                **Demo Accounts:**
-                - 👤 `admin` | 🔒 `admin123`
-                - 👤 `user1` | 🔒 `password1`
-                - 👤 `user2` | 🔒 `password2`
-                
-                ⚠️ **Note**: Change credentials in production!
-                """)
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div style='text-align: center; color: #999; margin-top: 3rem; padding: 2rem;
-                background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-                border-radius: 15px; border: 1px solid #e0e0e0;'>
-        <p style='font-size: 0.95rem; margin: 0;'>
-            🔒 <strong>Secure Multi-User Platform</strong><br>
-            New users: Contact administrator for account creation
-        </p>
-        <p style='font-size: 0.85rem; color: #aaa; margin-top: 0.5rem;'>
-            Enterprise-grade authentication | Data encryption enabled
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        pw = st.text_input("Enter password", type="password", key="login_password")
+        if st.button("Login", use_container_width=True):
+            if pw == APP_PASSWORD:
+                st.session_state.authenticated = True
+                st.success("Login successful")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("Incorrect password")
     st.stop()
 
 # ---------------------------
 # Main Application
 # ---------------------------
-st.markdown('<p class="main-header">📊 Professional Investment Platform</p>', unsafe_allow_html=True)
-st.markdown(f'<p class="subtitle">Welcome, <strong>{st.session_state.username}</strong> | Advanced Technical Analysis Dashboard</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header"> Professional Investment Platform</p>', unsafe_allow_html=True)
+st.markdown("**Advanced Technical Analysis Dashboard**")
 
 # Sidebar Navigation
 with st.sidebar:
-    st.markdown(f"""
-    <div style='background: linear-gradient(135deg, #1f77b4 0%, #2e5cb8 100%); 
-                padding: 1.5rem; border-radius: 15px; margin-bottom: 1.5rem;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-        <p style='color: white; font-size: 1.1rem; margin: 0; text-align: center;'>
-            👤 <strong>{st.session_state.username}</strong>
-        </p>
-        <p style='color: rgba(255,255,255,0.8); font-size: 0.85rem; margin: 0.3rem 0 0 0; text-align: center;'>
-            Active Session
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("### 📑 Navigation")
+    st.markdown("### Navigation")
     pages = ["Home", "Real-Time Monitor", "Stock Analyzer", "Cryptocurrency", 
              "Portfolio Manager", "News & Sentiment", "Predictions", 
              "Research Assistant", "Market Screener", 
@@ -838,41 +513,18 @@ with st.sidebar:
     page = st.selectbox("Select Page", pages, label_visibility="collapsed")
     
     st.markdown("---")
-    st.markdown("### ⚙️ Controls")
-    refresh_auto = st.slider("Auto-refresh interval", 0, 60, 0, help="Set to 0 to disable")
+    st.markdown("### Controls")
+    refresh_auto = st.slider("Auto-refresh (sec)", 0, 60, 0, help="0 = disabled")
     
     st.markdown("---")
-    st.markdown("### 📊 System Status")
-    
-    st.markdown("""
-    <div style='background: #d4edda; padding: 0.8rem; border-radius: 8px; margin: 0.5rem 0; border-left: 4px solid #28a745;'>
-        <span style='color: #155724;'>✓ Local Analysis Active</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if TEXTBLOB_AVAILABLE:
-        st.markdown("""
-        <div style='background: #d4edda; padding: 0.8rem; border-radius: 8px; margin: 0.5rem 0; border-left: 4px solid #28a745;'>
-            <span style='color: #155724;'>✓ Sentiment Analysis Ready</span>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div style='background: #fff3cd; padding: 0.8rem; border-radius: 8px; margin: 0.5rem 0; border-left: 4px solid #ffc107;'>
-            <span style='color: #856404;'>⚠ Install TextBlob</span>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div style='background: #d1ecf1; padding: 0.8rem; border-radius: 8px; margin: 0.5rem 0; border-left: 4px solid #17a2b8;'>
-        <span style='color: #0c5460;'>🔒 No API Keys Required</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### System Status")
+    st.success("✓ Local Analysis Active")
+    st.success("✓ Sentiment Analysis Ready" if TEXTBLOB_AVAILABLE else "⚠ Install TextBlob")
+    st.info("No API Keys Required")
     
     st.markdown("---")
-    if st.button("🚪 Logout", use_container_width=True):
+    if st.button("Logout", use_container_width=True):
         st.session_state.authenticated = False
-        st.session_state.username = None
         st.rerun()
 
 # Initialize last refresh time
@@ -934,7 +586,7 @@ if page == "Home":
         ### Supported Markets
         - 🇺🇸 US Stocks (e.g., AAPL, MSFT)
         - 🇮🇳 Indian Stocks (e.g., TCS.NS, INFY.NS)
-        - 💰 Cryptocurrencies (e.g., BTC-USD, ETH-USD)
+        -  Cryptocurrencies (e.g., BTC-USD, ETH-USD)
         """)
     
     st.info("**Note**: All data is processed locally. Your portfolio is stored in a local SQLite database.")
@@ -961,7 +613,7 @@ elif page == "Real-Time Monitor":
         st.session_state.last_refresh = time.time()
         
         for t in tickers:
-            with st.expander(f"📈 {t}", expanded=True):
+            with st.expander(f" {t}", expanded=True):
                 try:
                     ticker_obj = yf.Ticker(t)
                     intraday = ticker_obj.history(period="1d", interval="1m")
@@ -1014,7 +666,7 @@ elif page == "Real-Time Monitor":
 # Page: Stock Analyzer
 # ---------------------------
 elif page == "Stock Analyzer":
-    st.header("📊 Stock Analyzer")
+    st.header(" Stock Analyzer")
     
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
@@ -1029,7 +681,7 @@ elif page == "Stock Analyzer":
         can_proceed, wait_time = check_rate_limit(min_seconds=5)
         
         if not can_proceed:
-            st.warning(f"⏳ Please wait {wait_time} seconds between analyses to avoid rate limits.")
+            st.warning(f" Please wait {wait_time} seconds between analyses to avoid rate limits.")
             st.info("Yahoo Finance has strict rate limits. This cooldown helps prevent blocking.")
             st.stop()
         
@@ -1039,7 +691,7 @@ elif page == "Stock Analyzer":
                 hist = get_stock_history(ticker, period=period, interval=interval)
                 
                 if hist is None:
-                    st.error("⚠️ Could not fetch data. Please wait 60 seconds and try again.")
+                    st.error(" Could not fetch data. Please wait 60 seconds and try again.")
                     st.info("**Yahoo Finance Rate Limits**: Free tier has strict limits. Wait between requests.")
                     st.stop()
                 
@@ -1047,7 +699,7 @@ elif page == "Stock Analyzer":
                     st.error("No data available for this ticker")
                 else:
                     # Price Chart
-                    st.subheader("📈 Price Chart")
+                    st.subheader(" Price Chart")
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=hist.index,
@@ -1066,7 +718,7 @@ elif page == "Stock Analyzer":
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Fundamentals
-                    st.subheader("📊 Fundamentals")
+                    st.subheader(" Fundamentals")
                     info = get_stock_info(ticker)
                     
                     cols = st.columns(4)
@@ -1084,7 +736,7 @@ elif page == "Stock Analyzer":
                             col.metric(label, value)
                     
                     # Technical Analysis
-                    st.subheader("🔬 Technical Analysis")
+                    st.subheader(" Technical Analysis")
                     df = compute_indicators(hist)
                     risk_score, risk_level, risk_breakdown = calculate_risk_score(df)
                     
@@ -1105,13 +757,13 @@ elif page == "Stock Analyzer":
                         
                         rsi_val = df['RSI'].iloc[-1]
                         if rsi_val > 70:
-                            st.warning("⚠ Overbought (RSI > 70)")
+                            st.warning("Overbought (RSI > 70)")
                         elif rsi_val < 30:
                             st.info("ℹ Oversold (RSI < 30)")
                     
                     # Risk Analysis
                     st.markdown("---")
-                    st.subheader("⚠ Risk Analysis")
+                    st.subheader(" Risk Analysis")
                     
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Risk Score", f"{risk_score}/100")
@@ -1130,14 +782,14 @@ elif page == "Stock Analyzer":
                     st.dataframe(risk_df, use_container_width=True, hide_index=True)
                     
                     # Local AI Analysis
-                    st.subheader("🤖 AI Analysis")
+                    st.subheader(" AI Analysis")
                     analysis = generate_local_analysis(ticker, df)
                     st.markdown(analysis)
                     
             except Exception as e:
                 error_msg = str(e)
                 if "Too Many Requests" in error_msg or "rate limit" in error_msg.lower():
-                    st.error("⚠️ **Rate Limit Exceeded**")
+                    st.error(" **Rate Limit Exceeded**")
                     st.warning("""
                     Yahoo Finance has blocked too many requests. Please:
                     
@@ -1157,7 +809,7 @@ elif page == "Stock Analyzer":
 # Page: News & Sentiment
 # ---------------------------
 elif page == "News & Sentiment":
-    st.header("📰 News & Sentiment Analysis")
+    st.header(" News & Sentiment Analysis")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -1172,7 +824,7 @@ elif page == "News & Sentiment":
                 raw_news = getattr(t, "news", []) or []
                 
                 if not raw_news:
-                    st.warning("⚠️ Yahoo Finance did not return news for this ticker.")
+                    st.warning(" Yahoo Finance did not return news for this ticker.")
                     st.info("""
                     **Why this happens:**
                     - Yahoo Finance news API is unreliable and often doesn't return data
@@ -1188,7 +840,7 @@ elif page == "News & Sentiment":
                     
                     # Provide sample sentiment analysis
                     st.markdown("---")
-                    st.subheader("📊 Demo: Sentiment Analysis Capability")
+                    st.subheader(" Demo: Sentiment Analysis Capability")
                     st.write("Here's how sentiment analysis works with sample headlines:")
                     
                     sample_headlines = [
@@ -1227,7 +879,7 @@ elif page == "News & Sentiment":
                             headlines.append({"title": title, "link": link, "publisher": publisher})
                     
                     if headlines:
-                        st.subheader(f"📰 Latest Headlines for {nt}")
+                        st.subheader(f" Latest Headlines for {nt}")
                         
                         # Extract headline texts for sentiment analysis
                         headline_texts = [h['title'] for h in headlines]
@@ -1236,7 +888,7 @@ elif page == "News & Sentiment":
                         sentiment_results = analyze_news_sentiment(headline_texts)
                         
                         # Display sentiment summary
-                        st.markdown("### 📊 Sentiment Analysis Summary")
+                        st.markdown("###  Sentiment Analysis Summary")
                         col1, col2, col3, col4 = st.columns(4)
                         
                         col1.metric("Overall Sentiment", sentiment_results['overall_sentiment'])
@@ -1249,14 +901,14 @@ elif page == "News & Sentiment":
                         st.progress(min(max((sentiment_score + 1) / 2, 0), 1))
                         
                         if sentiment_score > 0.15:
-                            st.success("📈 Bullish sentiment detected - Positive news flow")
+                            st.success(" Bullish sentiment detected - Positive news flow")
                         elif sentiment_score < -0.15:
-                            st.error("📉 Bearish sentiment detected - Negative news flow")
+                            st.error(" Bearish sentiment detected - Negative news flow")
                         else:
-                            st.info("➡️ Neutral sentiment - Mixed signals")
+                            st.info(" Neutral sentiment - Mixed signals")
                         
                         st.markdown("---")
-                        st.markdown("### 📑 Individual Headlines")
+                        st.markdown("###  Individual Headlines")
                         
                         for i, h in enumerate(headlines, 1):
                             polarity, label, confidence = analyze_sentiment_local(h['title'])
@@ -1372,7 +1024,7 @@ Based on the {len(headlines)} most recent headlines, the aggregate sentiment sco
 # Page: Cryptocurrency
 # ---------------------------
 elif page == "Cryptocurrency":
-    st.header("💰 Cryptocurrency Analyzer")
+    st.header(" Cryptocurrency Analyzer")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -1439,7 +1091,7 @@ elif page == "Cryptocurrency":
                     st.plotly_chart(fig_vol, use_container_width=True)
                     
                     # Technical Analysis
-                    st.subheader("🔬 Technical Analysis")
+                    st.subheader(" Technical Analysis")
                     ch_indicators = compute_indicators(ch)
                     
                     if len(ch_indicators) > 50:
@@ -1509,9 +1161,8 @@ elif page == "Cryptocurrency":
 # Page: Portfolio Manager
 # ---------------------------
 elif page == "Portfolio Manager":
-    st.header("💼 Portfolio Management")
+    st.header(" Portfolio Management")
     
-    st.markdown(f"### {st.session_state.username}'s Portfolio")
     st.markdown("### Add New Position")
     
     with st.form("add_position", clear_on_submit=True):
@@ -1538,12 +1189,12 @@ elif page == "Portfolio Manager":
                     if cur is None:
                         st.error("Could not fetch current price. Please enter average price manually")
                     else:
-                        add_position_db(st.session_state.username, ticker, qty, cur)
+                        add_position_db(ticker, qty, cur)
                         st.success(f"Added {qty} x {ticker} @ ${cur:.2f}")
                         time.sleep(0.5)
                         st.rerun()
                 else:
-                    add_position_db(st.session_state.username, ticker, qty, avg)
+                    add_position_db(ticker, qty, avg)
                     st.success(f"Added {qty} x {ticker} @ ${avg:.2f}")
                     time.sleep(0.5)
                     st.rerun()
@@ -1551,7 +1202,7 @@ elif page == "Portfolio Manager":
     st.markdown("---")
     st.markdown("### Current Holdings")
     
-    df = list_positions_db(st.session_state.username)
+    df = list_positions_db()
     
     if df.empty:
         st.info("No positions yet. Add your first position above")
@@ -1607,7 +1258,7 @@ elif page == "Portfolio Manager":
             st.write("")
             st.write("")
             if st.button("Remove", use_container_width=True):
-                remove_position_db(st.session_state.username, rem_id)
+                remove_position_db(rem_id)
                 st.success(f"Position {rem_id} removed")
                 time.sleep(0.5)
                 st.rerun()
@@ -1616,7 +1267,7 @@ elif page == "Portfolio Manager":
 # Page: Predictions
 # ---------------------------
 elif page == "Predictions":
-    st.header("🔮 Technical Price Predictions")
+    st.header(" Technical Price Predictions")
     
     st.info("**Disclaimer**: These predictions are based on technical analysis and historical patterns. Markets are unpredictable. Always do your own research.")
     
@@ -1636,7 +1287,7 @@ elif page == "Predictions":
                     st.error("Not enough historical data for prediction")
                 else:
                     # Display recent price action
-                    st.subheader("📈 Recent Price History")
+                    st.subheader(" Recent Price History")
                     
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
@@ -1669,7 +1320,7 @@ elif page == "Predictions":
                     
                     # Technical prediction
                     st.markdown("---")
-                    st.subheader("📊 Technical Forecast")
+                    st.subheader(" Technical Forecast")
                     
                     # Simple momentum-based prediction
                     predicted_price = current_price * (1 + avg_daily_return * days)
@@ -1752,7 +1403,7 @@ This forecast uses:
                     st.markdown(prediction_text)
                     
                     # Visualization
-                    st.subheader("📉 Price Projection Visualization")
+                    st.subheader(" Price Projection Visualization")
                     
                     future_dates = pd.date_range(start=hist.index[-1], periods=days+1, freq='D')[1:]
                     
@@ -1820,7 +1471,7 @@ This forecast uses:
 # Page: Research Assistant
 # ---------------------------
 elif page == "Research Assistant":
-    st.header("🔍 Investment Research Assistant")
+    st.header(" Investment Research Assistant")
     st.markdown("Analyze stocks with comprehensive technical and fundamental research")
     
     # Quick action buttons
@@ -1860,7 +1511,7 @@ elif page == "Research Assistant":
             research_results = []
             
             for ticker in tickers_list:
-                with st.expander(f"📊 Analysis: {ticker}", expanded=True):
+                with st.expander(f" Analysis: {ticker}", expanded=True):
                     try:
                         hist = get_stock_history(ticker, period="6mo")
                         
@@ -1894,7 +1545,7 @@ elif page == "Research Assistant":
             # Summary
             if research_results:
                 st.markdown("---")
-                st.subheader("📋 Research Summary")
+                st.subheader(" Research Summary")
                 
                 buy_signals = [r for r in research_results if r['signal'] == 'BUY']
                 low_risk = [r for r in research_results if r['risk'] < 40]
@@ -2035,7 +1686,7 @@ elif page == "Market Screener":
                 
                 # Summary analysis
                 st.markdown("---")
-                st.subheader("📊 Screening Results Analysis")
+                st.subheader(" Screening Results Analysis")
                 
                 summary = f"""
 ### Screening Summary
@@ -2074,7 +1725,7 @@ elif page == "Market Screener":
 # Page: Compare Stocks
 # ---------------------------
 elif page == "Compare Stocks":
-    st.header("⚖️ Side-by-Side Stock Comparison")
+    st.header(" Side-by-Side Stock Comparison")
     
     col1, col2 = st.columns(2)
     
@@ -2134,12 +1785,12 @@ elif page == "Compare Stocks":
             
             if comparison_data:
                 # Comparison table
-                st.subheader("📊 Comparison Table")
+                st.subheader(" Comparison Table")
                 comp_df = pd.DataFrame(comparison_data)
                 st.dataframe(comp_df, use_container_width=True, hide_index=True)
                 
                 # Price comparison chart
-                st.subheader("📈 Performance Comparison")
+                st.subheader(" Performance Comparison")
                 
                 if price_history:
                     fig = go.Figure()
@@ -2166,7 +1817,7 @@ elif page == "Compare Stocks":
                 
                 # Comparison analysis
                 st.markdown("---")
-                st.subheader("📋 Comparison Analysis")
+                st.subheader(" Comparison Analysis")
                 
                 analysis = generate_comparison_analysis(comparison_data)
                 st.markdown(analysis)
@@ -2175,90 +1826,63 @@ elif page == "Compare Stocks":
 # Page: Settings
 # ---------------------------
 elif page == "Settings":
-    st.header("⚙️ Settings & System Information")
+    st.header("Settings & System Information")
     
     # System Status
-    st.subheader("📊 System Status")
+    st.subheader(" System Status")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.write("**Analysis Engine:**")
-        st.success("✓ Local analysis active")
-        st.success("✓ Technical indicators operational")
-        st.success("✓ Risk scoring enabled")
+        st.success(" Local analysis active")
+        st.success(" Technical indicators operational")
+        st.success(" Risk scoring enabled")
         
         if TEXTBLOB_AVAILABLE:
-            st.success("✓ Sentiment analysis ready")
+            st.success("Sentiment analysis ready")
         else:
-            st.warning("⚠ TextBlob not installed")
+            st.warning(" TextBlob not installed")
             st.code("pip install textblob")
     
     with col2:
         st.write("**Data Sources:**")
-        st.info("📊 Yahoo Finance API")
-        st.info("💾 Local SQLite database")
-        st.info("🔒 No external API keys required")
+        st.info(" Yahoo Finance API")
+        st.info(" Local SQLite database")
+        st.info(" No external API keys required")
     
     st.markdown("---")
     
     # Database Management
-    st.subheader("💾 Database Management")
+    st.subheader(" Database Management")
     
-    df = list_positions_db(st.session_state.username)
-    st.write(f"**Your Positions:** {len(df)}")
+    df = list_positions_db()
+    st.write(f"**Current Positions:** {len(df)}")
     st.write(f"**Database Path:** `{DB_PATH}`")
-    st.write(f"**Logged in as:** {st.session_state.username}")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("Clear My Positions", type="primary"):
+        if st.button("Clear All Positions", type="primary"):
             c = conn.cursor()
-            c.execute("DELETE FROM portfolio WHERE username = ?", (st.session_state.username,))
+            c.execute("DELETE FROM portfolio")
             conn.commit()
-            st.success("✓ Your portfolio cleared successfully")
+            st.success(" Portfolio cleared successfully")
             time.sleep(1)
             st.rerun()
     
     with col2:
-        if st.button("Show My Stats"):
+        if st.button("Show Database Stats"):
             c = conn.cursor()
-            c.execute("SELECT COUNT(*) as count, SUM(qty) as total_qty FROM portfolio WHERE username = ?", (st.session_state.username,))
+            c.execute("SELECT COUNT(*) as count, SUM(qty) as total_qty FROM portfolio")
             stats = c.fetchone()
-            st.write(f"- Your Positions: {stats[0]}")
-            st.write(f"- Your Total Shares: {stats[1]}")
-    
-    # Admin section
-    if st.session_state.username == "admin":
-        st.markdown("---")
-        st.subheader("🔐 Admin Controls")
-        
-        if st.button("View All Users' Portfolios"):
-            c = conn.cursor()
-            c.execute("SELECT username, COUNT(*) as positions, SUM(qty) as total_shares FROM portfolio GROUP BY username")
-            all_users = c.fetchall()
-            
-            if all_users:
-                st.write("**All Users:**")
-                for user, pos, shares in all_users:
-                    st.write(f"- {user}: {pos} positions, {shares} shares")
-            else:
-                st.info("No user data yet")
-        
-        if st.button("⚠️ Clear All Data (Admin)", type="secondary"):
-            if st.checkbox("I confirm I want to delete ALL user data"):
-                c = conn.cursor()
-                c.execute("DELETE FROM portfolio")
-                conn.commit()
-                st.warning("All user data cleared!")
-                time.sleep(1)
-                st.rerun()
+            st.write(f"- Total Positions: {stats[0]}")
+            st.write(f"- Total Shares: {stats[1]}")
     
     st.markdown("---")
     
     # System Information
-    st.subheader("ℹ️ System Information")
+    st.subheader(" System Information")
     
     st.write("**Required Packages:**")
     st.code("streamlit, yfinance, pandas, numpy, plotly, textblob")
@@ -2270,7 +1894,7 @@ elif page == "Settings":
     st.markdown("---")
     
     # API Testing
-    st.subheader("🧪 System Testing")
+    st.subheader(" System Testing")
     
     test_ticker = st.text_input("Test Ticker", "AAPL")
     
@@ -2279,20 +1903,20 @@ elif page == "Settings":
             try:
                 hist = get_stock_history(test_ticker, period="1d")
                 if hist is not None and not hist.empty:
-                    st.success("✓ Data fetch successful")
+                    st.success(" Data fetch successful")
                     st.write("Latest data:")
                     st.dataframe(hist.tail(1))
                 else:
-                    st.error("✗ No data returned")
+                    st.error(" No data returned")
             except Exception as e:
-                st.error(f"✗ Error: {e}")
+                st.error(f" Error: {e}")
     
     if st.button("Test Sentiment Analysis"):
         if TEXTBLOB_AVAILABLE:
             test_text = "Apple announces record quarterly earnings with strong iPhone sales"
             polarity, label, confidence = analyze_sentiment_local(test_text)
-            st.success("✓ Sentiment analysis operational")
+            st.success(" Sentiment analysis operational")
             st.write(f"Test Text: {test_text}")
             st.write(f"Sentiment: {label} (Score: {polarity:.2f}, Confidence: {confidence:.2%})")
         else:
-            st.error("✗ TextBlob not available")
+            st.error(" TextBlob not available")
